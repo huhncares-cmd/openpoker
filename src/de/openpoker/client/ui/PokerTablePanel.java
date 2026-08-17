@@ -110,7 +110,7 @@ public final class PokerTablePanel extends JPanel {
             g2.fillOval(x - avatarRadius - 4, y - avatarRadius - 4, (avatarRadius + 4) * 2, (avatarRadius + 4) * 2);
         }
 
-        g2.setColor(player.folded() ? new Color(55, 55, 60) : new Color(30, 32, 40));
+        g2.setColor(player.folded() || !player.inHand() ? new Color(55, 55, 60) : new Color(30, 32, 40));
         g2.fillOval(x - avatarRadius, y - avatarRadius, avatarRadius * 2, avatarRadius * 2);
         g2.setColor(isActive ? new Color(50, 255, 100) : new Color(212, 175, 55));
         g2.drawOval(x - avatarRadius, y - avatarRadius, avatarRadius * 2, avatarRadius * 2);
@@ -130,7 +130,10 @@ public final class PokerTablePanel extends JPanel {
         g2.setColor(Color.WHITE);
         g2.drawString(playerLabel, x - (nameW - 10) / 2, y + avatarRadius + 15);
 
-        String lastAction = player.folded() ? "FOLD" : player.lastAction();
+        String lastAction = !player.inHand() ? "WARTET"
+            : player.folded() ? "FOLD"
+            : player.allIn() ? "ALL-IN"
+            : player.lastAction();
         if (lastAction != null && !lastAction.isEmpty()) {
             if (player.currentBet() > 0 && !player.folded()) {
                 lastAction += " · " + player.currentBet();

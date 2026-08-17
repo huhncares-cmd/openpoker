@@ -55,7 +55,7 @@ public final class GameController {
         if (currentPhase == GamePhase.WAITING_FOR_PLAYERS && playersReadyForHand() >= 2) {
             startNewRoundInternal();
         } else {
-            String status = currentPhase.isBettingPhase()
+            String status = currentPhase != GamePhase.WAITING_FOR_PLAYERS
                 ? "Du steigst in der nächsten Runde ein."
                 : "Warte auf genügend Spieler für die nächste Runde.";
             broadcastGameState(status);
@@ -111,10 +111,6 @@ public final class GameController {
         broadcastGameState(connectedPlayers.size() < 2
             ? "Warte auf einen weiteren Spieler."
             : player.getName() + " ist gegangen.");
-    }
-
-    public synchronized void startNewRound() {
-        startNewRoundInternal();
     }
 
     private void startNewRoundInternal() {
@@ -275,8 +271,8 @@ public final class GameController {
     private void handleRaise(Player player, int raiseAmount) {
         int toCall = currentBet - player.getCurrentBet();
         long totalCost = (long) toCall + raiseAmount;
-        if (raiseAmount < MIN_RAISE) {
-            sendGameState(player, "Der minimale Raise beträgt " + MIN_RAISE + " Chips.");
+        if (raiseAmount != MIN_RAISE) {
+            sendGameState(player, "In dieser Variante beträgt ein Raise genau " + MIN_RAISE + " Chips.");
             return;
         }
         if (totalCost > player.getChips()) {
@@ -569,7 +565,9 @@ public final class GameController {
                 player.getName(),
                 player.getChips(),
                 player.getCurrentBet(),
+                player.isInHand(),
                 player.isInHand() && player.isFolded(),
+                player.isAllIn(),
                 currentPhase.isBettingPhase() && player == activePlayer,
                 playerLastActions.get(player.getId())))
             .toList();

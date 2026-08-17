@@ -1,6 +1,7 @@
 package de.openpoker.server;
 
 import java.io.IOException;
+import java.io.ObjectInputFilter;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
@@ -37,6 +38,7 @@ public final class Server {
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
              ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
             out.flush();
+            in.setObjectInputFilter(Server::filterClientMessage);
             player = gameController.addPlayer(playerName, out);
 
             while (!socket.isClosed()) {
@@ -52,6 +54,20 @@ public final class Server {
                 gameController.removePlayer(player);
             }
         }
+    }
+
+    private static ObjectInputFilter.Status filterClientMessage(ObjectInputFilter.FilterInfo info) {
+        if (info.depth() > 10 || info.arrayLength() > 1_024) {
+            return ObjectInputFilter.Status.REJECTED;
+        }
+
+        Class<?> type = info.serialClass();
+        if (type == null) {
+            return ObjectInputFilter.Status.UNDECIDED;
+        }
+        return type == String.class || PlayerAction.class.isAssignableFrom(type)
+            ? ObjectInputFilter.Status.ALLOWED
+            : ObjectInputFilter.Status.REJECTED;
     }
 
     public static void main(String[] args) {

@@ -10,8 +10,8 @@ import java.awt.event.WindowEvent;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Consumer;
 import java.util.function.LongFunction;
+import java.util.function.Predicate;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -43,7 +43,7 @@ public final class PokerWindow extends JFrame {
     private final JButton nextRoundBtn = createStyledButton("NÄCHSTE RUNDE ➔", new Color(120, 50, 180));
     private final JButton sendBtn = new JButton("Senden");
 
-    private transient Consumer<PlayerAction> actionListener;
+    private transient Predicate<PlayerAction> actionListener;
     private GameStateDTO gameState;
     private boolean connected;
     private boolean turnActionPending;
@@ -138,13 +138,12 @@ public final class PokerWindow extends JFrame {
 
     private void sendChat() {
         String text = chatInput.getText().trim();
-        if (connected && !text.isEmpty()) {
-            sendAction(new PlayerAction.Chat(text));
+        if (!text.isEmpty() && sendAction(new PlayerAction.Chat(text))) {
             chatInput.setText("");
         }
     }
 
-    public void setActionListener(Consumer<PlayerAction> listener) {
+    public void setActionListener(Predicate<PlayerAction> listener) {
         actionListener = listener;
     }
 
@@ -157,19 +156,18 @@ public final class PokerWindow extends JFrame {
         });
     }
 
-    private void sendAction(PlayerAction action) {
-        if (connected && actionListener != null) {
-            actionListener.accept(action);
-        }
+    private boolean sendAction(PlayerAction action) {
+        return connected && actionListener != null && actionListener.test(action);
     }
 
     private void sendTurnAction(LongFunction<PlayerAction> actionFactory) {
-        if (gameState == null || turnActionPending) {
+        if (!connected || actionListener == null || gameState == null || turnActionPending) {
             return;
         }
-        turnActionPending = true;
-        refreshControls();
-        sendAction(actionFactory.apply(gameState.turnId()));
+        if (sendAction(actionFactory.apply(gameState.turnId()))) {
+            turnActionPending = true;
+            refreshControls();
+        }
     }
 
     public void setConnectionState(boolean connected, String message) {
@@ -245,10 +243,7 @@ public final class PokerWindow extends JFrame {
         PlayerStateDTO active = players.stream().filter(PlayerStateDTO::active).findFirst().orElse(null);
         String message = state.statusMessage();
 
-        if (players.size() < 2) {
-            turnStatusLabel.setText("⏳ Warte auf 2. Spieler... (" + players.size() + "/2)");
-            turnStatusLabel.setForeground(new Color(255, 175, 0));
-        } else if (state.phase() == GamePhase.WAITING_FOR_PLAYERS) {
+        if (state.phase() == GamePhase.WAITING_FOR_PLAYERS) {
             turnStatusLabel.setText(message == null || message.isBlank() ? "Warte auf spielbereite Spieler..." : message);
             turnStatusLabel.setForeground(new Color(255, 175, 0));
         } else if (state.phase() == GamePhase.SHOWDOWN) {
@@ -260,6 +255,9 @@ public final class PokerWindow extends JFrame {
         } else if (active != null) {
             turnStatusLabel.setText("⏳ " + active.name() + " ist am Zug");
             turnStatusLabel.setForeground(new Color(100, 180, 255));
+        } else if (players.size() < 2) {
+            turnStatusLabel.setText("⏳ Warte auf 2. Spieler... (" + players.size() + "/2)");
+            turnStatusLabel.setForeground(new Color(255, 175, 0));
         } else {
             turnStatusLabel.setText(message == null || message.isBlank() ? "Spiel läuft..." : message);
             turnStatusLabel.setForeground(new Color(100, 180, 255));

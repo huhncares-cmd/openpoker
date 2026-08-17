@@ -1,13 +1,16 @@
 package de.openpoker.client;
 
 import java.io.IOException;
+import java.io.ObjectInputFilter;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.SwingUtilities;
 import de.openpoker.client.ui.PokerWindow;
@@ -22,11 +25,18 @@ public final class Client implements AutoCloseable {
     private final String host;
     private final int port;
     private final AtomicBoolean closed = new AtomicBoolean();
-    private final ExecutorService writer = Executors.newSingleThreadExecutor(task -> {
-        Thread thread = new Thread(task, "poker-writer");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private final ExecutorService writer = new ThreadPoolExecutor(
+        1,
+        1,
+        0L,
+        TimeUnit.MILLISECONDS,
+        new ArrayBlockingQueue<>(100),
+        task -> {
+            Thread thread = new Thread(task, "poker-writer");
+            thread.setDaemon(true);
+            return thread;
+        },
+        new ThreadPoolExecutor.AbortPolicy());
 
     private volatile Socket socket;
     private volatile ObjectOutputStream out;
@@ -64,6 +74,7 @@ public final class Client implements AutoCloseable {
             try (ObjectOutputStream output = new ObjectOutputStream(connection.getOutputStream())) {
                 output.flush();
                 try (ObjectInputStream input = new ObjectInputStream(connection.getInputStream())) {
+                    input.setObjectInputFilter(Client::filterServerMessage);
                     out = output;
                     onUiThread(() -> pokerWindow.setConnectionState(true, "Mit Server verbunden"));
 
@@ -90,11 +101,16 @@ public final class Client implements AutoCloseable {
         }
     }
 
-    private void sendActionToServer(PlayerAction action) {
+    private boolean sendActionToServer(PlayerAction action) {
+        if (out == null || closed.get()) {
+            return false;
+        }
         try {
             writer.execute(() -> writeAction(action));
+            return true;
         } catch (RejectedExecutionException ignored) {
-            // Das Fenster wird bereits geschlossen.
+            System.err.println("Aktion verworfen: Sendewarteschlange ist voll oder der Client wird beendet.");
+            return false;
         }
     }
 
@@ -131,6 +147,24 @@ public final class Client implements AutoCloseable {
     private static String errorMessage(Exception exception) {
         String message = exception.getMessage();
         return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
+    }
+
+    private static ObjectInputFilter.Status filterServerMessage(ObjectInputFilter.FilterInfo info) {
+        if (info.depth() > 25 || info.arrayLength() > 10_000) {
+            return ObjectInputFilter.Status.REJECTED;
+        }
+
+        Class<?> type = info.serialClass();
+        if (type == null) {
+            return ObjectInputFilter.Status.UNDECIDED;
+        }
+        String className = type.getName();
+        return className.startsWith("de.openpoker.common.")
+                || className.startsWith("java.lang.")
+                || className.startsWith("java.util.")
+                || type.isArray()
+            ? ObjectInputFilter.Status.ALLOWED
+            : ObjectInputFilter.Status.REJECTED;
     }
 
     private void closeSocket() {

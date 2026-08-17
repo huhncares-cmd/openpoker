@@ -4,9 +4,8 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import de.openpoker.common.model.Card;
 import de.openpoker.common.network.GameStateDTO;
@@ -22,7 +21,8 @@ public final class Player {
     private int handContribution;
     private final List<Card> cards = new ArrayList<>();
     private final ObjectOutputStream out;
-    private final ExecutorService sender;
+    private final BlockingQueue<Delivery> pendingDelivery = new ArrayBlockingQueue<>(1);
+    private final Thread sender;
     private final AtomicBoolean sendFailureReported = new AtomicBoolean();
     private volatile boolean senderClosed;
 
@@ -31,8 +31,7 @@ public final class Player {
         this.name = name;
         this.chips = chips;
         this.out = out;
-        this.sender = Executors.newSingleThreadExecutor(
-            Thread.ofVirtual().name("poker-send-" + id + "-", 0).factory());
+        sender = Thread.ofVirtual().name("poker-send-" + id).start(this::sendLoop);
     }
 
     public String getId() {
@@ -48,6 +47,9 @@ public final class Player {
     }
 
     public void setChips(int chips) {
+        if (chips < 0) {
+            throw new IllegalArgumentException("Chips dürfen nicht negativ sein.");
+        }
         this.chips = chips;
     }
 
@@ -118,30 +120,43 @@ public final class Player {
             return;
         }
 
-        try {
-            sender.execute(() -> {
-                try {
-                    out.writeObject(state);
-                    out.reset();
-                    out.flush();
-                } catch (IOException | RuntimeException exception) {
-                    if (sendFailureReported.compareAndSet(false, true)) {
-                        try {
-                            out.close();
-                        } catch (IOException ignored) {
-                            // Das Schließen dient nur dazu, den Reader-Thread aufzuwecken.
-                        }
-                        onFailure.run();
-                    }
-                }
-            });
-        } catch (RejectedExecutionException ignored) {
-            // Der Spieler wurde zeitgleich entfernt.
+        Delivery delivery = new Delivery(state, onFailure);
+        while (!pendingDelivery.offer(delivery)) {
+            pendingDelivery.poll();
         }
     }
 
     public void closeSender() {
         senderClosed = true;
-        sender.shutdownNow();
+        sender.interrupt();
+    }
+
+    private void sendLoop() {
+        Delivery delivery = null;
+        try {
+            while (!senderClosed) {
+                delivery = pendingDelivery.take();
+                out.writeObject(delivery.state());
+                out.reset();
+                out.flush();
+                delivery = null;
+            }
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        } catch (IOException | RuntimeException exception) {
+            if (sendFailureReported.compareAndSet(false, true)) {
+                try {
+                    out.close();
+                } catch (IOException ignored) {
+                    // Das Schließen dient nur dazu, den Reader-Thread aufzuwecken.
+                }
+                if (delivery != null) {
+                    delivery.onFailure().run();
+                }
+            }
+        }
+    }
+
+    private record Delivery(GameStateDTO state, Runnable onFailure) {
     }
 }
