@@ -1,4 +1,4 @@
-package de.openpoker.common;
+package de.openpoker.common.model;
 
 public enum Suit {
     CLUBS, DIAMONDS, HEARTS, SPADES

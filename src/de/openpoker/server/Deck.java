@@ -1,8 +1,11 @@
-package de.openpoker.common;
+package de.openpoker.server;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import de.openpoker.common.model.Card;
+import de.openpoker.common.model.Rank;
+import de.openpoker.common.model.Suit;
 
 public class Deck {
     private final List<Card> cards = new ArrayList<>();
