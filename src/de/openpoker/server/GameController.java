@@ -33,6 +33,7 @@ public final class GameController {
     private GamePhase currentPhase = GamePhase.WAITING_FOR_PLAYERS;
     private int activePlayerIndex = -1;
     private int currentBet;
+    private long turnId;
     private long nextPlayerId = 1;
     private String previousStarterId;
 
@@ -69,9 +70,12 @@ public final class GameController {
         }
 
         boolean wasActive = removedIndex == activePlayerIndex;
-        if (player.isInHand() && !player.isFolded() && currentPhase.isBettingPhase()) {
+        if (player.isInHand() && !player.isFolded() && !player.isAllIn() && currentPhase.isBettingPhase()) {
             player.setFolded(true);
             playerLastActions.put(player.getId(), "FOLD (getrennt)");
+        }
+        if (currentPhase.isBettingPhase()) {
+            turnId++;
         }
         pendingPlayerIds.remove(player.getId());
         connectedPlayers.remove(removedIndex);
@@ -150,6 +154,7 @@ public final class GameController {
         activePlayerIndex = findNextActionableIndex(previousIndex);
         previousStarterId = connectedPlayers.get(activePlayerIndex).getId();
         preparePendingPlayers();
+        turnId++;
 
         addChat("System: Neue Runde gestartet! Phase: PREFLOP");
         broadcastGameState("Neue Runde gestartet.");
@@ -185,6 +190,19 @@ public final class GameController {
             return;
         }
 
+        long submittedTurnId = switch (action) {
+            case PlayerAction.Fold fold -> fold.turnId();
+            case PlayerAction.Check check -> check.turnId();
+            case PlayerAction.Call call -> call.turnId();
+            case PlayerAction.Raise raise -> raise.turnId();
+            case PlayerAction.Chat ignored -> throw new IllegalStateException("Chat wurde bereits behandelt.");
+            case PlayerAction.NextRound ignored -> throw new IllegalStateException("Rundenwechsel wurde bereits behandelt.");
+        };
+        if (submittedTurnId != turnId) {
+            sendGameState(player, "Diese Aktion gehört zu einem bereits beendeten Zug.");
+            return;
+        }
+
         switch (action) {
             case PlayerAction.Fold ignored -> handleFold(player);
             case PlayerAction.Check ignored -> handleCheck(player);
@@ -209,6 +227,7 @@ public final class GameController {
     }
 
     private void handleFold(Player player) {
+        turnId++;
         player.setFolded(true);
         pendingPlayerIds.remove(player.getId());
         playerLastActions.put(player.getId(), "FOLD");
@@ -228,6 +247,7 @@ public final class GameController {
             return;
         }
 
+        turnId++;
         pendingPlayerIds.remove(player.getId());
         playerLastActions.put(player.getId(), "CHECK");
         addChat("System: " + player.getName() + " checkt.");
@@ -241,6 +261,7 @@ public final class GameController {
             return;
         }
 
+        turnId++;
         int paid = player.commitChips(toCall);
         gameTable.addPot(paid);
         pendingPlayerIds.remove(player.getId());
@@ -267,6 +288,7 @@ public final class GameController {
             return;
         }
 
+        turnId++;
         int paid = player.commitChips((int) totalCost);
         gameTable.addPot(paid);
         currentBet += raiseAmount;
@@ -558,6 +580,7 @@ public final class GameController {
             List.copyOf(recipient.getCards()),
             recipient.getId(),
             currentPhase,
+            turnId,
             players,
             statusMessage,
             List.copyOf(chatHistory));

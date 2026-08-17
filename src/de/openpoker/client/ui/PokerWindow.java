@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.LongFunction;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -45,6 +46,7 @@ public final class PokerWindow extends JFrame {
     private transient Consumer<PlayerAction> actionListener;
     private GameStateDTO gameState;
     private boolean connected;
+    private boolean turnActionPending;
 
     public PokerWindow() {
         setTitle("OpenPoker Client");
@@ -110,10 +112,10 @@ public final class PokerWindow extends JFrame {
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 8));
         buttonPanel.setOpaque(false);
-        foldBtn.addActionListener(e -> sendAction(new PlayerAction.Fold()));
-        checkBtn.addActionListener(e -> sendAction(new PlayerAction.Check()));
-        callBtn.addActionListener(e -> sendAction(new PlayerAction.Call()));
-        raiseBtn.addActionListener(e -> sendAction(new PlayerAction.Raise(RAISE_AMOUNT)));
+        foldBtn.addActionListener(e -> sendTurnAction(PlayerAction.Fold::new));
+        checkBtn.addActionListener(e -> sendTurnAction(PlayerAction.Check::new));
+        callBtn.addActionListener(e -> sendTurnAction(PlayerAction.Call::new));
+        raiseBtn.addActionListener(e -> sendTurnAction(turnId -> new PlayerAction.Raise(turnId, RAISE_AMOUNT)));
         nextRoundBtn.addActionListener(e -> sendAction(new PlayerAction.NextRound()));
         buttonPanel.add(foldBtn);
         buttonPanel.add(checkBtn);
@@ -161,8 +163,20 @@ public final class PokerWindow extends JFrame {
         }
     }
 
+    private void sendTurnAction(LongFunction<PlayerAction> actionFactory) {
+        if (gameState == null || turnActionPending) {
+            return;
+        }
+        turnActionPending = true;
+        refreshControls();
+        sendAction(actionFactory.apply(gameState.turnId()));
+    }
+
     public void setConnectionState(boolean connected, String message) {
         this.connected = connected;
+        if (!connected) {
+            turnActionPending = false;
+        }
         chatInput.setEnabled(connected);
         sendBtn.setEnabled(connected);
         refreshControls();
@@ -180,6 +194,7 @@ public final class PokerWindow extends JFrame {
 
     public void updateGameState(GameStateDTO state) {
         gameState = Objects.requireNonNull(state);
+        turnActionPending = false;
         List<PlayerStateDTO> players = state.players() == null ? List.of() : state.players();
         tablePanel.updateTable(state.pot(), state.communityCards(), players);
 
@@ -209,7 +224,7 @@ public final class PokerWindow extends JFrame {
     private void refreshControls() {
         PlayerStateDTO me = gameState == null ? null : findMe(gameState).orElse(null);
         GamePhase phase = gameState == null ? null : gameState.phase();
-        boolean myTurn = connected && phase != null && phase.isBettingPhase()
+        boolean myTurn = connected && !turnActionPending && phase != null && phase.isBettingPhase()
             && me != null && me.active() && !me.folded();
         int toCall = myTurn ? Math.max(0, gameState.currentBet() - me.currentBet()) : 0;
 

@@ -12,6 +12,7 @@ public record GameStateDTO(
     List<Card> myCards,
     String myPlayerId,
     GamePhase phase,
+    long turnId,
     List<PlayerStateDTO> players,
     String statusMessage,
     List<String> chatHistory
