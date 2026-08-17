@@ -8,21 +8,24 @@ import java.net.Socket;
 import java.util.concurrent.atomic.AtomicInteger;
 import de.openpoker.common.network.PlayerAction;
 
-public class Server {
-    private static final int PORT = 8888;
+public final class Server {
+    private static final int DEFAULT_PORT = 8888;
+    private final int port;
     private final GameController gameController = new GameController();
     private final AtomicInteger playerCounter = new AtomicInteger(1);
 
-    public void start() {
-        System.out.println("Poker Server startet auf Port " + PORT + "...");
-        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
+    public Server(int port) {
+        this.port = port;
+    }
+
+    public void start() throws IOException {
+        System.out.println("Poker Server startet auf Port " + port + "...");
+        try (ServerSocket serverSocket = new ServerSocket(port)) {
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("Neuer Client verbunden: " + clientSocket.getInetAddress());
-                new Thread(() -> handleClient(clientSocket)).start();
+                Thread.startVirtualThread(() -> handleClient(clientSocket));
             }
-        } catch (IOException e) {
-            System.err.println("Server-Fehler: " + e.getMessage());
         }
     }
 
@@ -30,17 +33,18 @@ public class Server {
         String playerName = "Spieler " + playerCounter.getAndIncrement();
         Player player = null;
 
-        try {
-            ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-            ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
-
+        try (socket;
+             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
+             ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
+            out.flush();
             player = gameController.addPlayer(playerName, out);
 
-            while (true) {
-                PlayerAction action = (PlayerAction) in.readObject();
-                gameController.handleAction(player, action);
+            while (!socket.isClosed()) {
+                Object message = in.readObject();
+                if (message instanceof PlayerAction action) {
+                    gameController.handleAction(player, action);
+                }
             }
-
         } catch (Exception e) {
             System.out.println(playerName + " getrennt: " + e.getMessage());
         } finally {
@@ -51,6 +55,24 @@ public class Server {
     }
 
     public static void main(String[] args) {
-        new Server().start();
+        int port = DEFAULT_PORT;
+        if (args.length > 0) {
+            try {
+                port = Integer.parseInt(args[0]);
+                if (port < 1 || port > 65_535) {
+                    throw new NumberFormatException();
+                }
+            } catch (NumberFormatException exception) {
+                System.err.println("Ungültiger Port: " + args[0]);
+                System.exit(2);
+            }
+        }
+
+        try {
+            new Server(port).start();
+        } catch (IOException exception) {
+            System.err.println("Server-Fehler: " + exception.getMessage());
+            System.exit(1);
+        }
     }
 }

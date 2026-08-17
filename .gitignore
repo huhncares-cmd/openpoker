@@ -1,4 +1,7 @@
 bin/
+target/
 .settings/
 .metadata/
 .classpath
+pom.xml
+test/

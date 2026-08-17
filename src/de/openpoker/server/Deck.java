@@ -7,7 +7,7 @@ import de.openpoker.common.model.Card;
 import de.openpoker.common.model.Rank;
 import de.openpoker.common.model.Suit;
 
-public class Deck {
+public final class Deck {
     private final List<Card> cards = new ArrayList<>();
 
     public Deck() {

@@ -1,15 +1,18 @@
 package de.openpoker.server;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import de.openpoker.common.model.Card;
-import de.openpoker.common.model.Rank;
-import de.openpoker.common.model.Suit;
+import java.util.Objects;
 
-public class HandEvaluator {
+import de.openpoker.common.model.Card;
+
+public final class HandEvaluator {
+
+    private HandEvaluator() {
+    }
 
     public enum HandRank {
         HIGH_CARD(1, "Höchste Karte"),
@@ -40,117 +43,149 @@ public class HandEvaluator {
         }
     }
 
-    public record HandResult(HandRank rank, int score, String description) implements Comparable<HandResult> {
+    /**
+     * The tie breakers are ordered from most to least significant. For example,
+     * two pair stores [higher pair, lower pair, kicker].
+     */
+    public record HandResult(HandRank rank, List<Integer> tieBreakers, String description)
+            implements Comparable<HandResult> {
+
+        public HandResult {
+            Objects.requireNonNull(rank, "rank");
+            tieBreakers = List.copyOf(tieBreakers);
+            Objects.requireNonNull(description, "description");
+        }
+
         @Override
-        public int compareTo(HandResult o) {
-            return Integer.compare(this.score, o.score);
+        public int compareTo(HandResult other) {
+            Objects.requireNonNull(other, "other");
+
+            int comparison = Integer.compare(rank.getValue(), other.rank.getValue());
+            if (comparison != 0) {
+                return comparison;
+            }
+
+            int sharedLength = Math.min(tieBreakers.size(), other.tieBreakers.size());
+            for (int i = 0; i < sharedLength; i++) {
+                comparison = Integer.compare(tieBreakers.get(i), other.tieBreakers.get(i));
+                if (comparison != 0) {
+                    return comparison;
+                }
+            }
+            return Integer.compare(tieBreakers.size(), other.tieBreakers.size());
         }
     }
 
     public static HandResult evaluateHand(List<Card> holeCards, List<Card> communityCards) {
-        List<Card> allCards = new ArrayList<>();
-        if (holeCards != null) allCards.addAll(holeCards);
-        if (communityCards != null) allCards.addAll(communityCards);
-
-        if (allCards.size() < 5) {
-            return new HandResult(HandRank.HIGH_CARD, 100, "Unvollständig");
+        List<Card> cards = new ArrayList<>();
+        if (holeCards != null) {
+            cards.addAll(holeCards);
+        }
+        if (communityCards != null) {
+            cards.addAll(communityCards);
         }
 
-        allCards.sort((c1, c2) -> Integer.compare(c2.rank().getValue(), c1.rank().getValue()));
-
-        Map<Rank, Integer> rankCounts = new HashMap<>();
-        Map<Suit, Integer> suitCounts = new HashMap<>();
-
-        for (Card c : allCards) {
-            rankCounts.put(c.rank(), rankCounts.getOrDefault(c.rank(), 0) + 1);
-            suitCounts.put(c.suit(), suitCounts.getOrDefault(c.suit(), 0) + 1);
+        if (cards.size() < 5) {
+            List<Integer> highCards = cards.stream()
+                    .map(card -> card.rank().getValue())
+                    .sorted(Comparator.reverseOrder())
+                    .toList();
+            return new HandResult(HandRank.HIGH_CARD, highCards, "Unvollständig");
         }
 
-        boolean isFlush = suitCounts.values().stream().anyMatch(count -> count >= 5);
-        boolean isStraight = checkStraight(allCards);
-
-        if (isFlush && isStraight) {
-            if (allCards.get(0).rank() == Rank.ACE) {
-                return new HandResult(HandRank.ROYAL_FLUSH, 1000, "Royal Flush");
-            }
-            return new HandResult(HandRank.STRAIGHT_FLUSH, 900 + allCards.get(0).rank().getValue(), "Straight Flush");
-        }
-
-        for (Map.Entry<Rank, Integer> entry : rankCounts.entrySet()) {
-            if (entry.getValue() == 4) {
-                return new HandResult(HandRank.FOUR_OF_A_KIND, 800 + entry.getKey().getValue(), "Vierling (" + entry.getKey() + ")");
-            }
-        }
-
-        boolean hasThree = false;
-        Rank threeRank = null;
-        boolean hasPair = false;
-        Rank pairRank = null;
-
-        for (Map.Entry<Rank, Integer> entry : rankCounts.entrySet()) {
-            if (entry.getValue() >= 3 && !hasThree) {
-                hasThree = true;
-                threeRank = entry.getKey();
-            } else if (entry.getValue() >= 2) {
-                hasPair = true;
-                pairRank = entry.getKey();
+        HandResult best = null;
+        int cardCount = cards.size();
+        for (int first = 0; first < cardCount - 4; first++) {
+            for (int second = first + 1; second < cardCount - 3; second++) {
+                for (int third = second + 1; third < cardCount - 2; third++) {
+                    for (int fourth = third + 1; fourth < cardCount - 1; fourth++) {
+                        for (int fifth = fourth + 1; fifth < cardCount; fifth++) {
+                            HandResult result = evaluateFive(List.of(
+                                    cards.get(first), cards.get(second), cards.get(third),
+                                    cards.get(fourth), cards.get(fifth)));
+                            if (best == null || result.compareTo(best) > 0) {
+                                best = result;
+                            }
+                        }
+                    }
+                }
             }
         }
-
-        if (hasThree && hasPair) {
-            return new HandResult(HandRank.FULL_HOUSE, 700 + threeRank.getValue(), "Full House (" + threeRank + " über " + pairRank + ")");
-        }
-
-        if (isFlush) {
-            return new HandResult(HandRank.FLUSH, 600 + allCards.get(0).rank().getValue(), "Flush");
-        }
-
-        if (isStraight) {
-            return new HandResult(HandRank.STRAIGHT, 500 + allCards.get(0).rank().getValue(), "Straße (" + allCards.get(0).rank() + " hoch)");
-        }
-
-        if (hasThree) {
-            return new HandResult(HandRank.THREE_OF_A_KIND, 400 + threeRank.getValue(), "Drilling (" + threeRank + ")");
-        }
-
-        List<Rank> pairs = new ArrayList<>();
-        for (Map.Entry<Rank, Integer> entry : rankCounts.entrySet()) {
-            if (entry.getValue() == 2) {
-                pairs.add(entry.getKey());
-            }
-        }
-
-        if (pairs.size() >= 2) {
-            pairs.sort((r1, r2) -> Integer.compare(r2.getValue(), r1.getValue()));
-            return new HandResult(HandRank.TWO_PAIR, 300 + pairs.get(0).getValue() * 10 + pairs.get(1).getValue(), "Zwei Paare (" + pairs.get(0) + " & " + pairs.get(1) + ")");
-        }
-
-        if (pairs.size() == 1) {
-            return new HandResult(HandRank.ONE_PAIR, 200 + pairs.get(0).getValue(), "Ein Paar (" + pairs.get(0) + ")");
-        }
-
-        Rank highCardRank = allCards.get(0).rank();
-        return new HandResult(HandRank.HIGH_CARD, 100 + highCardRank.getValue(), "Höchste Karte (" + highCardRank + ")");
+        return best;
     }
 
-    private static boolean checkStraight(List<Card> sortedCards) {
-        List<Integer> values = new ArrayList<>();
-        for (Card c : sortedCards) {
-            if (!values.contains(c.rank().getValue())) {
-                values.add(c.rank().getValue());
-            }
+    private static HandResult evaluateFive(List<Card> cards) {
+        Map<Integer, Integer> rankCounts = new HashMap<>();
+        for (Card card : cards) {
+            rankCounts.merge(card.rank().getValue(), 1, Integer::sum);
         }
-        Collections.sort(values);
 
-        int consecutive = 1;
-        for (int i = 0; i < values.size() - 1; i++) {
-            if (values.get(i + 1) == values.get(i) + 1) {
-                consecutive++;
-                if (consecutive >= 5) return true;
-            } else {
-                consecutive = 1;
+        List<Integer> ranksDescending = cards.stream()
+                .map(card -> card.rank().getValue())
+                .sorted(Comparator.reverseOrder())
+                .toList();
+        List<Map.Entry<Integer, Integer>> groups = rankCounts.entrySet().stream()
+                .sorted(Map.Entry.<Integer, Integer>comparingByValue().reversed()
+                        .thenComparing(Map.Entry.<Integer, Integer>comparingByKey().reversed()))
+                .toList();
+
+        boolean flush = cards.stream().allMatch(card -> card.suit() == cards.get(0).suit());
+        int straightHigh = straightHigh(rankCounts.keySet().stream().toList());
+
+        if (flush && straightHigh == 14) {
+            return result(HandRank.ROYAL_FLUSH, List.of(14));
+        }
+        if (flush && straightHigh > 0) {
+            return result(HandRank.STRAIGHT_FLUSH, List.of(straightHigh));
+        }
+        if (groups.get(0).getValue() == 4) {
+            return result(HandRank.FOUR_OF_A_KIND,
+                    List.of(groups.get(0).getKey(), groups.get(1).getKey()));
+        }
+        if (groups.get(0).getValue() == 3 && groups.get(1).getValue() == 2) {
+            return result(HandRank.FULL_HOUSE,
+                    List.of(groups.get(0).getKey(), groups.get(1).getKey()));
+        }
+        if (flush) {
+            return result(HandRank.FLUSH, ranksDescending);
+        }
+        if (straightHigh > 0) {
+            return result(HandRank.STRAIGHT, List.of(straightHigh));
+        }
+        if (groups.get(0).getValue() == 3) {
+            return result(HandRank.THREE_OF_A_KIND, groupRanks(groups));
+        }
+        if (groups.get(0).getValue() == 2 && groups.get(1).getValue() == 2) {
+            return result(HandRank.TWO_PAIR, groupRanks(groups));
+        }
+        if (groups.get(0).getValue() == 2) {
+            return result(HandRank.ONE_PAIR, groupRanks(groups));
+        }
+        return result(HandRank.HIGH_CARD, ranksDescending);
+    }
+
+    private static int straightHigh(List<Integer> ranks) {
+        if (ranks.size() != 5) {
+            return 0;
+        }
+
+        List<Integer> sorted = ranks.stream().sorted().toList();
+        if (sorted.equals(List.of(2, 3, 4, 5, 14))) {
+            return 5;
+        }
+        for (int i = 1; i < sorted.size(); i++) {
+            if (sorted.get(i) != sorted.get(0) + i) {
+                return 0;
             }
         }
-        return false;
+        return sorted.get(sorted.size() - 1);
+    }
+
+    private static List<Integer> groupRanks(List<Map.Entry<Integer, Integer>> groups) {
+        return groups.stream().map(Map.Entry::getKey).toList();
+    }
+
+    private static HandResult result(HandRank rank, List<Integer> tieBreakers) {
+        return new HandResult(rank, tieBreakers, rank.getName());
     }
 }

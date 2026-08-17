@@ -10,7 +10,8 @@ import javax.swing.JPanel;
 import de.openpoker.common.model.Card;
 import de.openpoker.common.model.Suit;
 
-public class CardPanel extends JPanel {
+public final class CardPanel extends JPanel {
+    private static final long serialVersionUID = 1L;
     private Card card;
 
     public CardPanel() {

@@ -8,19 +8,18 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.util.List;
-import java.util.Map;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 import de.openpoker.common.model.Card;
+import de.openpoker.common.network.PlayerStateDTO;
 
-public class PokerTablePanel extends JPanel {
+public final class PokerTablePanel extends JPanel {
+    private static final long serialVersionUID = 1L;
     private final JLabel potLabel = new JLabel("POT: 0 CHIPS", JLabel.CENTER);
     private final JPanel cardsContainer = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 10));
 
-    private List<String> playerNames;
-    private Map<String, String> playerLastActions;
-    private String activePlayer;
+    private transient List<PlayerStateDTO> players = List.of();
 
     public PokerTablePanel() {
         setLayout(new BorderLayout());
@@ -35,11 +34,9 @@ public class PokerTablePanel extends JPanel {
         add(cardsContainer, BorderLayout.CENTER);
     }
 
-    public void updateTable(int pot, List<Card> communityCards, List<String> playerNames, Map<String, String> playerLastActions, String activePlayer) {
+    public void updateTable(int pot, List<Card> communityCards, List<PlayerStateDTO> players) {
         potLabel.setText("💰 POT: " + pot + " CHIPS");
-        this.playerNames = playerNames;
-        this.playerLastActions = playerLastActions;
-        this.activePlayer = activePlayer;
+        this.players = players == null ? List.of() : List.copyOf(players);
 
         cardsContainer.removeAll();
         if (communityCards != null) {
@@ -76,18 +73,15 @@ public class PokerTablePanel extends JPanel {
         g2.setColor(new Color(212, 175, 55, 180));
         g2.drawRoundRect(margin + 18, margin + 18, w - 36, h - 36, 60, 60);
 
-        // Spieler nur in der unteren Hälfte platzieren (Links -> Unten -> Rechts)
-        if (playerNames != null && !playerNames.isEmpty()) {
-            int numPlayers = playerNames.size();
+        if (!players.isEmpty()) {
+            int numPlayers = players.size();
             double centerX = getWidth() / 2.0;
             double centerY = getHeight() / 2.0 + 10;
             double radiusX = (w / 2.0) - 35;
             double radiusY = (h / 2.0) - 30;
 
             for (int i = 0; i < numPlayers; i++) {
-                String playerName = playerNames.get(i);
-                boolean isActive = playerName.equals(activePlayer);
-                String lastAction = (playerLastActions != null) ? playerLastActions.get(playerName) : null;
+                PlayerStateDTO player = players.get(i);
 
                 // Verteilung von Links (180°) über Unten (90°) nach Rechts (0°)
                 double angle;
@@ -102,24 +96,26 @@ public class PokerTablePanel extends JPanel {
                 int px = (int) (centerX + radiusX * Math.cos(angle));
                 int py = (int) (centerY + radiusY * Math.sin(angle));
 
-                drawPlayerAvatar(g2, px, py, playerName, isActive, lastAction);
+                drawPlayerAvatar(g2, px, py, player);
             }
         }
     }
 
-    private void drawPlayerAvatar(Graphics2D g2, int x, int y, String name, boolean isActive, String lastAction) {
+    private void drawPlayerAvatar(Graphics2D g2, int x, int y, PlayerStateDTO player) {
         int avatarRadius = 24;
+        boolean isActive = player.active();
 
         if (isActive) {
             g2.setColor(new Color(50, 255, 100, 200));
             g2.fillOval(x - avatarRadius - 4, y - avatarRadius - 4, (avatarRadius + 4) * 2, (avatarRadius + 4) * 2);
         }
 
-        g2.setColor(new Color(30, 32, 40));
+        g2.setColor(player.folded() ? new Color(55, 55, 60) : new Color(30, 32, 40));
         g2.fillOval(x - avatarRadius, y - avatarRadius, avatarRadius * 2, avatarRadius * 2);
         g2.setColor(isActive ? new Color(50, 255, 100) : new Color(212, 175, 55));
         g2.drawOval(x - avatarRadius, y - avatarRadius, avatarRadius * 2, avatarRadius * 2);
 
+        String name = player.name() == null ? "Spieler" : player.name();
         String initial = name.length() > 0 ? name.substring(0, Math.min(3, name.length())) : "P";
         g2.setColor(Color.WHITE);
         g2.setFont(new Font("SansSerif", Font.BOLD, 12));
@@ -127,13 +123,18 @@ public class PokerTablePanel extends JPanel {
         g2.drawString(initial, x - strW / 2, y + 4);
 
         g2.setFont(new Font("SansSerif", Font.BOLD, 11));
-        int nameW = g2.getFontMetrics().stringWidth(name) + 10;
+        String playerLabel = name + " (" + player.chips() + ")";
+        int nameW = g2.getFontMetrics().stringWidth(playerLabel) + 10;
         g2.setColor(new Color(20, 20, 25, 220));
         g2.fillRoundRect(x - nameW / 2, y + avatarRadius + 2, nameW, 18, 8, 8);
         g2.setColor(Color.WHITE);
-        g2.drawString(name, x - (nameW - 10) / 2, y + avatarRadius + 15);
+        g2.drawString(playerLabel, x - (nameW - 10) / 2, y + avatarRadius + 15);
 
+        String lastAction = player.folded() ? "FOLD" : player.lastAction();
         if (lastAction != null && !lastAction.isEmpty()) {
+            if (player.currentBet() > 0 && !player.folded()) {
+                lastAction += " · " + player.currentBet();
+            }
             g2.setFont(new Font("SansSerif", Font.BOLD, 10));
             int actW = g2.getFontMetrics().stringWidth(lastAction) + 10;
 

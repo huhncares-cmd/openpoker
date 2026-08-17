@@ -4,23 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 import de.openpoker.common.model.Card;
 
-public class GameTable {
-    private final List<Player> players = new ArrayList<>();
+public final class GameTable {
     private final List<Card> communityCards = new ArrayList<>();
     private final Deck deck = new Deck();
-    private int pot = 0;
-
-    public void addPlayer(Player player) {
-        players.add(player);
-    }
-
-    public void removePlayer(Player player) {
-        players.remove(player);
-    }
-
-    public List<Player> getPlayers() {
-        return players;
-    }
+    private int pot;
 
     public List<Card> getCommunityCards() {
         return communityCards;
@@ -35,11 +22,23 @@ public class GameTable {
     }
 
     public void setPot(int pot) {
+        if (pot < 0) {
+            throw new IllegalArgumentException("Der Pot darf nicht negativ sein.");
+        }
         this.pot = pot;
     }
 
     public void addPot(int amount) {
-        this.pot += amount;
+        if (amount < 0) {
+            throw new IllegalArgumentException("Der Einsatz darf nicht negativ sein.");
+        }
+        pot = Math.addExact(pot, amount);
+    }
+
+    public int takePot() {
+        int result = pot;
+        pot = 0;
+        return result;
     }
 
     public void dealCommunityCard() {
