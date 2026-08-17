@@ -52,6 +52,7 @@ public class GameController {
 
     private void dealCardsToPlayer(Player player) {
         player.getCards().clear();
+        player.setFolded(false);
         if (gameTable.getDeck().remainingCards() >= 2) {
             player.getCards().add(gameTable.getDeck().drawCard());
             player.getCards().add(gameTable.getDeck().drawCard());
@@ -122,35 +123,46 @@ public class GameController {
                 chatHistory.add("System: " + sender + " schiebt (CHECK).");
             }
             case PlayerAction.Fold f -> {
+                player.setFolded(true);
                 playerLastActions.put(sender, "FOLD");
-                chatHistory.add("System: " + sender + " passt (FOLD). Rundenende.");
-                currentPhase = GamePhase.SHOWDOWN;
+                chatHistory.add("System: " + sender + " passt (FOLD).");
 
-                // Der andere verbleibende Spieler gewinnt den Pot
-                Player winner = connectedPlayers.stream()
-                        .filter(p -> !p.getId().equals(player.getId()))
-                        .findFirst().orElse(null);
+                long activeUnfolded = connectedPlayers.stream().filter(p -> !p.isFolded()).count();
 
-                if (winner != null) {
-                    winner.setChips(winner.getChips() + gameTable.getPot());
-                    chatHistory.add("🏆 SYSTEM: " + winner.getName() + " gewinnt " + gameTable.getPot() + " Chips (Gegner hat gepasst)!");
+                if (activeUnfolded <= 1) {
+                    currentPhase = GamePhase.SHOWDOWN;
+                    Player winner = connectedPlayers.stream().filter(p -> !p.isFolded()).findFirst().orElse(null);
+                    if (winner != null) {
+                        winner.setChips(winner.getChips() + gameTable.getPot());
+                        chatHistory.add("🏆 SYSTEM: " + winner.getName() + " gewinnt " + gameTable.getPot() + " Chips (alle anderen haben gepasst)!");
+                    }
+                    broadcastGameState("Rundenende! Klicke 'Nächste Runde'.");
+                    return;
                 }
-
-                broadcastGameState(sender + " hat gepasst (FOLD). Klicke 'Nächste Runde'.");
-                return;
             }
             default -> {}
         }
 
         actionsInCurrentPhase++;
-        activePlayerIndex = (activePlayerIndex + 1) % connectedPlayers.size();
 
-        if (actionsInCurrentPhase >= connectedPlayers.size()) {
+        advanceToNextActivePlayer();
+
+        List<Player> activeUnfoldedPlayers = connectedPlayers.stream().filter(p -> !p.isFolded()).toList();
+        if (actionsInCurrentPhase >= activeUnfoldedPlayers.size()) {
             actionsInCurrentPhase = 0;
             advancePhase();
         } else {
-            broadcastGameState("Zug wechselt zu " + connectedPlayers.get(activePlayerIndex % connectedPlayers.size()).getName());
+            Player nextActive = connectedPlayers.get(activePlayerIndex % connectedPlayers.size());
+            broadcastGameState("Zug wechselt zu " + nextActive.getName());
         }
+    }
+
+    private void advanceToNextActivePlayer() {
+        if (connectedPlayers.isEmpty()) return;
+        do {
+            activePlayerIndex = (activePlayerIndex + 1) % connectedPlayers.size();
+        } while (connectedPlayers.get(activePlayerIndex % connectedPlayers.size()).isFolded()
+                 && connectedPlayers.stream().anyMatch(p -> !p.isFolded()));
     }
 
     private void advancePhase() {
@@ -175,11 +187,12 @@ public class GameController {
             case RIVER -> {
                 currentPhase = GamePhase.SHOWDOWN;
 
-                // Gewinner ermitteln mit HandEvaluator
                 Player winner = null;
                 HandEvaluator.HandResult bestResult = null;
 
                 for (Player p : connectedPlayers) {
+                    if (p.isFolded()) continue;
+
                     HandEvaluator.HandResult result = HandEvaluator.evaluateHand(p.getCards(), gameTable.getCommunityCards());
                     chatHistory.add("System: " + p.getName() + " zeigt: " + result.description());
 
@@ -201,7 +214,7 @@ public class GameController {
 
     public synchronized void broadcastGameState(String statusMessage) {
         String activePlayerName = connectedPlayers.isEmpty() ? "-" : connectedPlayers.get(activePlayerIndex % connectedPlayers.size()).getName();
-        List<String> playerNames = connectedPlayers.stream().map(p -> p.getName() + " (" + p.getChips() + " Chips)").toList();
+        List<String> playerNames = connectedPlayers.stream().map(p -> p.getName() + (p.isFolded() ? " [FOLDED]" : "") + " (" + p.getChips() + " Chips)").toList();
 
         for (Player p : connectedPlayers) {
             try {

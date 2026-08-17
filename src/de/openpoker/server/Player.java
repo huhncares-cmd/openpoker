@@ -9,6 +9,7 @@ public class Player {
     private final String id;
     private final String name;
     private int chips;
+    private boolean folded = false;
     private final List<Card> cards = new ArrayList<>();
     private final transient ObjectOutputStream out;
 
@@ -33,6 +34,14 @@ public class Player {
 
     public void setChips(int chips) {
         this.chips = chips;
+    }
+
+    public boolean isFolded() {
+        return folded;
+    }
+
+    public void setFolded(boolean folded) {
+        this.folded = folded;
     }
 
     public List<Card> getCards() {
