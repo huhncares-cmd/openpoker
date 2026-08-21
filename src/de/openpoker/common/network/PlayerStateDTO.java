@@ -14,5 +14,6 @@ public record PlayerStateDTO(
         boolean allIn,
         boolean active,
         String lastAction,
-        List<Card> cards) implements Serializable {
+        List<Card> cards,
+        boolean isDealer) implements Serializable {
 }

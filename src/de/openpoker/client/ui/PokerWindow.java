@@ -36,7 +36,6 @@ import de.openpoker.common.network.PlayerStateDTO;
 
 public final class PokerWindow extends JFrame {
     private static final long serialVersionUID = 1L;
-    private static final int RAISE_AMOUNT = 50;
 
     private final PokerTablePanel tablePanel = new PokerTablePanel();
     private final JPanel myCardsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 4));
@@ -47,7 +46,9 @@ public final class PokerWindow extends JFrame {
     private final JButton foldBtn = new ModernButton("FOLD", new Color(195, 45, 45), new Color(150, 25, 25));
     private final JButton checkBtn = new ModernButton("CHECK", new Color(45, 105, 200), new Color(25, 75, 160));
     private final JButton callBtn = new ModernButton("CALL", new Color(38, 155, 70), new Color(22, 115, 48));
-    private final JButton raiseBtn = new ModernButton("RAISE +50", new Color(225, 130, 20), new Color(180, 95, 10));
+    private final JButton raise50Btn = new ModernButton("RAISE +50", new Color(225, 130, 20), new Color(180, 95, 10));
+    private final JButton raise100Btn = new ModernButton("RAISE +100", new Color(225, 110, 15), new Color(180, 80, 10));
+    private final JButton allInBtn = new ModernButton("ALL-IN", new Color(215, 40, 20), new Color(160, 20, 10));
     private final JButton nextRoundBtn = new ModernButton("NÄCHSTE RUNDE ➔", new Color(135, 55, 195), new Color(95, 30, 150));
     private final JButton sendBtn = new ModernButton("Senden", new Color(55, 65, 85), new Color(40, 48, 65));
 
@@ -58,8 +59,8 @@ public final class PokerWindow extends JFrame {
 
     public PokerWindow() {
         setTitle("OpenPoker");
-        setSize(1020, 720);
-        setMinimumSize(new Dimension(880, 620));
+        setSize(1040, 720);
+        setMinimumSize(new Dimension(900, 620));
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
         getContentPane().setBackground(new Color(14, 16, 22));
@@ -141,19 +142,34 @@ public final class PokerWindow extends JFrame {
         handContainer.add(myCardsPanel, BorderLayout.CENTER);
         bottomPanel.add(handContainer, BorderLayout.NORTH);
 
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 14, 8));
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 8));
         buttonPanel.setOpaque(false);
 
         foldBtn.addActionListener(e -> sendTurnAction(PlayerAction.Fold::new));
         checkBtn.addActionListener(e -> sendTurnAction(PlayerAction.Check::new));
         callBtn.addActionListener(e -> sendTurnAction(PlayerAction.Call::new));
-        raiseBtn.addActionListener(e -> sendTurnAction(turnId -> new PlayerAction.Raise(turnId, RAISE_AMOUNT)));
+        raise50Btn.addActionListener(e -> sendTurnAction(turnId -> new PlayerAction.Raise(turnId, 50)));
+        raise100Btn.addActionListener(e -> sendTurnAction(turnId -> new PlayerAction.Raise(turnId, 100)));
+        allInBtn.addActionListener(e -> {
+            PlayerStateDTO me = gameState == null ? null : findMe(gameState).orElse(null);
+            if (me != null) {
+                int toCall = Math.max(0, gameState.currentBet() - me.currentBet());
+                int allInRaise = me.chips() - toCall;
+                if (allInRaise > 0) {
+                    sendTurnAction(turnId -> new PlayerAction.Raise(turnId, allInRaise));
+                } else {
+                    sendTurnAction(PlayerAction.Call::new);
+                }
+            }
+        });
         nextRoundBtn.addActionListener(e -> sendAction(new PlayerAction.NextRound()));
 
         buttonPanel.add(foldBtn);
         buttonPanel.add(checkBtn);
         buttonPanel.add(callBtn);
-        buttonPanel.add(raiseBtn);
+        buttonPanel.add(raise50Btn);
+        buttonPanel.add(raise100Btn);
+        buttonPanel.add(allInBtn);
         buttonPanel.add(nextRoundBtn);
         bottomPanel.add(buttonPanel, BorderLayout.SOUTH);
         return bottomPanel;
@@ -255,12 +271,21 @@ public final class PokerWindow extends JFrame {
         boolean myTurn = connected && !turnActionPending && phase != null && phase.isBettingPhase()
             && me != null && me.active() && !me.folded();
         int toCall = myTurn ? Math.max(0, gameState.currentBet() - me.currentBet()) : 0;
+        int maxRaise = me != null ? me.chips() - toCall : 0;
 
         foldBtn.setEnabled(myTurn);
         checkBtn.setEnabled(myTurn && toCall == 0);
         callBtn.setEnabled(myTurn && toCall > 0 && me.chips() > 0);
         callBtn.setText(toCall > 0 && me != null ? "CALL " + Math.min(toCall, me.chips()) : "CALL");
-        raiseBtn.setEnabled(myTurn && me.chips() >= toCall + RAISE_AMOUNT);
+
+        raise50Btn.setEnabled(myTurn && maxRaise >= 50);
+        raise100Btn.setEnabled(myTurn && maxRaise >= 100);
+        allInBtn.setEnabled(myTurn && me.chips() > 0);
+        if (me != null && myTurn) {
+            allInBtn.setText("ALL-IN (" + me.chips() + ")");
+        } else {
+            allInBtn.setText("ALL-IN");
+        }
 
         boolean showdown = phase == GamePhase.SHOWDOWN;
         nextRoundBtn.setVisible(showdown);
@@ -313,14 +338,14 @@ public final class PokerWindow extends JFrame {
             super(text);
             this.topColor = topColor;
             this.bottomColor = bottomColor;
-            setFont(new Font("SansSerif", Font.BOLD, 13));
+            setFont(new Font("SansSerif", Font.BOLD, 12));
             setForeground(Color.WHITE);
             setFocusPainted(false);
             setBorderPainted(false);
             setContentAreaFilled(false);
             setOpaque(false);
             setCursor(new Cursor(Cursor.HAND_CURSOR));
-            setPreferredSize(new Dimension(145, 38));
+            setPreferredSize(new Dimension(130, 36));
 
             addMouseListener(new MouseAdapter() {
                 @Override

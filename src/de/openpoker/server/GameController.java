@@ -20,10 +20,14 @@ import de.openpoker.common.network.PlayerStateDTO;
 public final class GameController {
     static final int STARTING_CHIPS = 1_000;
     static final int MAX_PLAYERS = 10;
+    static final int DEFAULT_SMALL_BLIND = 10;
+    static final int DEFAULT_BIG_BLIND = 20;
     static final int MIN_RAISE = 50;
     private static final int CHAT_HISTORY_LIMIT = 100;
     private static final int CHAT_MESSAGE_LIMIT = 500;
 
+    private final int smallBlind;
+    private final int bigBlind;
     private final GameTable gameTable = new GameTable();
     private final List<Player> connectedPlayers = new ArrayList<>();
     private final List<Player> handPlayers = new ArrayList<>();
@@ -37,8 +41,16 @@ public final class GameController {
     private long turnId;
     private long nextPlayerId = 1;
     private String previousStarterId;
+    private int dealerIndex = -1;
+    private String currentDealerId;
 
     public GameController() {
+        this(DEFAULT_SMALL_BLIND, DEFAULT_BIG_BLIND);
+    }
+
+    public GameController(int smallBlind, int bigBlind) {
+        this.smallBlind = Math.max(0, smallBlind);
+        this.bigBlind = Math.max(0, bigBlind);
         addChat("System: Willkommen beim OpenPoker Server!");
     }
 
@@ -134,6 +146,7 @@ public final class GameController {
         if (readyPlayers.size() < 2) {
             currentPhase = GamePhase.WAITING_FOR_PLAYERS;
             activePlayerIndex = -1;
+            currentDealerId = null;
             addChat("System: Mindestens zwei Spieler mit Chips sind erforderlich.");
             broadcastGameState("Mindestens zwei Spieler mit Chips sind erforderlich.");
             return;
@@ -146,11 +159,56 @@ public final class GameController {
             }
         }
 
+        // Dealer-Position weiterrücken
+        dealerIndex = (dealerIndex + 1) % readyPlayers.size();
+        Player dealerPlayer = readyPlayers.get(dealerIndex);
+        currentDealerId = dealerPlayer.getId();
+
         currentPhase = GamePhase.PREFLOP;
-        int previousIndex = indexOfConnectedPlayer(previousStarterId);
-        activePlayerIndex = findNextActionableIndex(previousIndex);
-        previousStarterId = connectedPlayers.get(activePlayerIndex).getId();
-        preparePendingPlayers();
+
+        if (smallBlind > 0 && bigBlind > 0) {
+            Player sbPlayer;
+            Player bbPlayer;
+            int firstActorIndex;
+
+            if (readyPlayers.size() == 2) {
+                // Heads-Up Regeln: Dealer ist Small Blind und beginnt vor dem Flop
+                sbPlayer = dealerPlayer;
+                bbPlayer = readyPlayers.get((dealerIndex + 1) % 2);
+                firstActorIndex = connectedPlayers.indexOf(sbPlayer);
+            } else {
+                sbPlayer = readyPlayers.get((dealerIndex + 1) % readyPlayers.size());
+                bbPlayer = readyPlayers.get((dealerIndex + 2) % readyPlayers.size());
+                Player utgPlayer = readyPlayers.get((dealerIndex + 3) % readyPlayers.size());
+                firstActorIndex = connectedPlayers.indexOf(utgPlayer);
+            }
+
+            int sbPaid = sbPlayer.commitChips(Math.min(smallBlind, sbPlayer.getChips()));
+            gameTable.addPot(sbPaid);
+            playerLastActions.put(sbPlayer.getId(), "SB " + sbPaid);
+
+            int bbPaid = bbPlayer.commitChips(Math.min(bigBlind, bbPlayer.getChips()));
+            gameTable.addPot(bbPaid);
+            playerLastActions.put(bbPlayer.getId(), "BB " + bbPaid);
+
+            currentBet = Math.max(sbPlayer.getCurrentBet(), bbPlayer.getCurrentBet());
+
+            addChat("System: Dealer ist " + dealerPlayer.getName() + ". SB: " + sbPlayer.getName() + " (" + sbPaid + "), BB: " + bbPlayer.getName() + " (" + bbPaid + ").");
+
+            preparePendingPlayers();
+            activePlayerIndex = findNextActionableIndex(firstActorIndex - 1);
+            if (activePlayerIndex < 0 || !pendingPlayerIds.contains(connectedPlayers.get(activePlayerIndex).getId())) {
+                activePlayerIndex = findNextPendingIndex(activePlayerIndex);
+            }
+        } else {
+            int previousIndex = indexOfConnectedPlayer(previousStarterId);
+            activePlayerIndex = findNextActionableIndex(previousIndex);
+            preparePendingPlayers();
+        }
+
+        if (activePlayerIndex >= 0 && activePlayerIndex < connectedPlayers.size()) {
+            previousStarterId = connectedPlayers.get(activePlayerIndex).getId();
+        }
         turnId++;
 
         addChat("System: Neue Runde gestartet! Phase: PREFLOP");
@@ -271,26 +329,34 @@ public final class GameController {
 
     private void handleRaise(Player player, int raiseAmount) {
         int toCall = currentBet - player.getCurrentBet();
-        long totalCost = (long) toCall + raiseAmount;
-        if (raiseAmount != MIN_RAISE) {
-            sendGameState(player, "In dieser Variante beträgt ein Raise genau " + MIN_RAISE + " Chips.");
+        int totalCost = toCall + raiseAmount;
+        int maxRaisePossible = player.getChips() - toCall;
+
+        if (maxRaisePossible <= 0) {
+            sendGameState(player, "Du kannst nicht erhöhen.");
+            return;
+        }
+
+        boolean isAllIn = (raiseAmount == maxRaisePossible);
+        int minAllowed = Math.min(MIN_RAISE, maxRaisePossible);
+
+        if (raiseAmount < minAllowed && !isAllIn) {
+            sendGameState(player, "Der Mindest-Raise beträgt " + minAllowed + " Chips.");
             return;
         }
         if (totalCost > player.getChips()) {
             sendGameState(player, "Für diesen Raise fehlen Chips.");
             return;
         }
-        if ((long) currentBet + raiseAmount > Integer.MAX_VALUE) {
-            sendGameState(player, "Der Einsatz ist zu hoch.");
-            return;
-        }
 
         turnId++;
-        int paid = player.commitChips((int) totalCost);
+        int paid = player.commitChips(totalCost);
         gameTable.addPot(paid);
         currentBet += raiseAmount;
-        playerLastActions.put(player.getId(), "RAISE +" + raiseAmount);
-        addChat("System: " + player.getName() + " erhöht um " + raiseAmount + " Chips.");
+        String raiseLabel = isAllIn || player.isAllIn() ? "ALL-IN +" + raiseAmount : "RAISE +" + raiseAmount;
+        playerLastActions.put(player.getId(), raiseLabel);
+        addChat("System: " + player.getName() + " erhöht um " + raiseAmount + " Chips"
+            + (player.isAllIn() ? " (ALL-IN)." : "."));
 
         pendingPlayerIds.clear();
         connectedPlayers.stream()
@@ -431,7 +497,7 @@ public final class GameController {
             List<Player> contributors = handPlayers.stream()
                 .filter(player -> player.getHandContribution() >= level)
                 .toList();
-            int sidePot = Math.multiplyExact(level - previousLevel, contributors.size());
+            int sidePot = (level - previousLevel) * contributors.size();
             List<Player> candidates = eligiblePlayers.stream()
                 .filter(player -> player.getHandContribution() >= level)
                 .toList();
@@ -442,7 +508,7 @@ public final class GameController {
             } else {
                 distribute(sidePot, bestPlayers(candidates, results), payouts);
             }
-            distributed = Math.addExact(distributed, sidePot);
+            distributed += sidePot;
             previousLevel = level;
         }
 
@@ -576,6 +642,7 @@ public final class GameController {
                 boolean revealCards = (currentPhase == GamePhase.SHOWDOWN && player.isInHand() && !player.isFolded())
                     || player == recipient;
                 List<Card> cards = revealCards ? List.copyOf(player.getCards()) : null;
+                boolean isDealer = player.getId().equals(currentDealerId);
                 return new PlayerStateDTO(
                     player.getId(),
                     player.getName(),
@@ -586,7 +653,8 @@ public final class GameController {
                     player.isAllIn(),
                     currentPhase.isBettingPhase() && player == activePlayer,
                     playerLastActions.get(player.getId()),
-                    cards);
+                    cards,
+                    isDealer);
             })
             .toList();
         return new GameStateDTO(

@@ -2,17 +2,10 @@ package de.openpoker.client;
 
 import java.awt.GridLayout;
 import java.io.IOException;
-import java.io.ObjectInputFilter;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -30,20 +23,8 @@ public final class Client implements AutoCloseable {
     private final String playerName;
     private final String host;
     private final int port;
-    private final AtomicBoolean closed = new AtomicBoolean();
-    private final ExecutorService writer = new ThreadPoolExecutor(
-        1,
-        1,
-        0L,
-        TimeUnit.MILLISECONDS,
-        new ArrayBlockingQueue<>(100),
-        task -> {
-            Thread thread = new Thread(task, "poker-writer");
-            thread.setDaemon(true);
-            return thread;
-        },
-        new ThreadPoolExecutor.AbortPolicy());
 
+    private volatile boolean closed;
     private volatile Socket socket;
     private volatile ObjectOutputStream out;
     private volatile PokerWindow window;
@@ -53,7 +34,7 @@ public final class Client implements AutoCloseable {
     }
 
     public Client(String playerName, String host, int port) {
-        this.playerName = playerName != null && !playerName.isBlank() ? playerName.trim() : "Spieler";
+        this.playerName = (playerName != null && !playerName.isBlank()) ? playerName.trim() : "Spieler";
         this.host = host;
         this.port = port;
     }
@@ -79,7 +60,7 @@ public final class Client implements AutoCloseable {
         try (Socket connection = new Socket()) {
             socket = connection;
             connection.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MS);
-            if (closed.get()) {
+            if (closed) {
                 return;
             }
 
@@ -89,11 +70,10 @@ public final class Client implements AutoCloseable {
                 output.flush();
 
                 try (ObjectInputStream input = new ObjectInputStream(connection.getInputStream())) {
-                    input.setObjectInputFilter(Client::filterServerMessage);
                     out = output;
                     onUiThread(() -> pokerWindow.setConnectionState(true, "Mit Server verbunden (" + playerName + ")"));
 
-                    while (!closed.get()) {
+                    while (!closed) {
                         Object message = input.readObject();
                         if (message instanceof GameStateDTO state) {
                             onUiThread(() -> pokerWindow.updateGameState(state));
@@ -103,57 +83,46 @@ public final class Client implements AutoCloseable {
             }
         } catch (Exception exception) {
             disconnectMessage = "Verbindungsfehler: " + errorMessage(exception);
-            if (!closed.get()) {
+            if (!closed) {
                 System.err.println(disconnectMessage);
             }
         } finally {
             out = null;
             socket = null;
-            if (!closed.get()) {
+            if (!closed) {
                 String message = disconnectMessage;
                 onUiThread(() -> pokerWindow.setConnectionState(false, message));
             }
         }
     }
 
-    private boolean sendActionToServer(PlayerAction action) {
-        if (out == null || closed.get()) {
-            return false;
-        }
-        try {
-            writer.execute(() -> writeAction(action));
-            return true;
-        } catch (RejectedExecutionException ignored) {
-            System.err.println("Aktion verworfen: Sendewarteschlange ist voll oder der Client wird beendet.");
-            return false;
-        }
-    }
-
-    private void writeAction(PlayerAction action) {
+    private synchronized boolean sendActionToServer(PlayerAction action) {
         ObjectOutputStream output = out;
-        if (output == null || closed.get()) {
-            return;
+        if (output == null || closed) {
+            return false;
         }
 
         try {
             output.writeObject(action);
             output.reset();
             output.flush();
+            return true;
         } catch (IOException exception) {
             out = null;
-            closeSocket();
+            close();
             String message = "Senden fehlgeschlagen: " + errorMessage(exception);
             System.err.println(message);
             PokerWindow pokerWindow = window;
             if (pokerWindow != null) {
                 onUiThread(() -> pokerWindow.setConnectionState(false, message));
             }
+            return false;
         }
     }
 
     private void onUiThread(Runnable action) {
         SwingUtilities.invokeLater(() -> {
-            if (!closed.get()) {
+            if (!closed) {
                 action.run();
             }
         });
@@ -164,42 +133,19 @@ public final class Client implements AutoCloseable {
         return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
     }
 
-    private static ObjectInputFilter.Status filterServerMessage(ObjectInputFilter.FilterInfo info) {
-        if (info.depth() > 25 || info.arrayLength() > 10_000) {
-            return ObjectInputFilter.Status.REJECTED;
-        }
-
-        Class<?> type = info.serialClass();
-        if (type == null) {
-            return ObjectInputFilter.Status.UNDECIDED;
-        }
-        String className = type.getName();
-        return className.startsWith("de.openpoker.common.")
-                || className.startsWith("java.lang.")
-                || className.startsWith("java.util.")
-                || type.isArray()
-            ? ObjectInputFilter.Status.ALLOWED
-            : ObjectInputFilter.Status.REJECTED;
-    }
-
-    private void closeSocket() {
-        Socket connection = socket;
-        socket = null;
-        if (connection != null) {
-            try {
-                connection.close();
-            } catch (IOException ignored) {
-                // Die Verbindung ist bereits beendet.
-            }
-        }
-    }
-
     @Override
-    public void close() {
-        if (closed.compareAndSet(false, true)) {
+    public synchronized void close() {
+        if (!closed) {
+            closed = true;
             out = null;
-            closeSocket();
-            writer.shutdownNow();
+            Socket connection = socket;
+            socket = null;
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (IOException ignored) {
+                }
+            }
         }
     }
 

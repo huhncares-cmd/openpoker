@@ -224,6 +224,23 @@ public final class PokerTablePanel extends JPanel {
         int strW = g2.getFontMetrics().stringWidth(initial);
         g2.drawString(initial, x - strW / 2, y + 4);
 
+        // 5b. Dealer-Button
+        if (player.isDealer()) {
+            int dbX = x + avatarRadius - 4;
+            int dbY = y - avatarRadius + 4;
+            int dbR = 9;
+            g2.setColor(new Color(0, 0, 0, 80));
+            g2.fillOval(dbX - dbR + 1, dbY - dbR + 1, dbR * 2, dbR * 2);
+            g2.setColor(new Color(250, 250, 250));
+            g2.fillOval(dbX - dbR, dbY - dbR, dbR * 2, dbR * 2);
+            g2.setColor(new Color(212, 175, 55));
+            g2.setStroke(new BasicStroke(1.5f));
+            g2.drawOval(dbX - dbR, dbY - dbR, dbR * 2, dbR * 2);
+            g2.setColor(new Color(30, 30, 30));
+            g2.setFont(new Font("SansSerif", Font.BOLD, 10));
+            g2.drawString("D", dbX - 4, dbY + 4);
+        }
+
         // 6. Spieler-Name & Chips Badge
         g2.setFont(new Font("SansSerif", Font.BOLD, 11));
         String playerLabel = name + " · 🪙 " + String.format("%,d", player.chips());

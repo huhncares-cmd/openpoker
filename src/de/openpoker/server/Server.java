@@ -1,19 +1,17 @@
 package de.openpoker.server;
 
 import java.io.IOException;
-import java.io.ObjectInputFilter;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.concurrent.atomic.AtomicInteger;
 import de.openpoker.common.network.PlayerAction;
 
 public final class Server {
     private static final int DEFAULT_PORT = 8888;
     private final int port;
     private final GameController gameController = new GameController();
-    private final AtomicInteger playerCounter = new AtomicInteger(1);
+    private int playerCounter = 1;
 
     public Server(int port) {
         this.port = port;
@@ -25,13 +23,16 @@ public final class Server {
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("Neuer Client verbunden: " + clientSocket.getInetAddress());
-                Thread.startVirtualThread(() -> handleClient(clientSocket));
+                new Thread(() -> handleClient(clientSocket), "poker-client-handler").start();
             }
         }
     }
 
     private void handleClient(Socket socket) {
-        String defaultName = "Spieler " + playerCounter.getAndIncrement();
+        String defaultName;
+        synchronized (this) {
+            defaultName = "Spieler " + playerCounter++;
+        }
         String playerName = defaultName;
         Player player = null;
 
@@ -39,7 +40,6 @@ public final class Server {
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
              ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
             out.flush();
-            in.setObjectInputFilter(Server::filterClientMessage);
 
             Object initial = in.readObject();
             if (initial instanceof String customName && !customName.isBlank()) {
@@ -68,20 +68,6 @@ public final class Server {
                 gameController.removePlayer(player);
             }
         }
-    }
-
-    private static ObjectInputFilter.Status filterClientMessage(ObjectInputFilter.FilterInfo info) {
-        if (info.depth() > 10 || info.arrayLength() > 1_024) {
-            return ObjectInputFilter.Status.REJECTED;
-        }
-
-        Class<?> type = info.serialClass();
-        if (type == null) {
-            return ObjectInputFilter.Status.UNDECIDED;
-        }
-        return type == String.class || PlayerAction.class.isAssignableFrom(type)
-            ? ObjectInputFilter.Status.ALLOWED
-            : ObjectInputFilter.Status.REJECTED;
     }
 
     public static void main(String[] args) {

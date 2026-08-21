@@ -4,9 +4,6 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import de.openpoker.common.model.Card;
 import de.openpoker.common.network.GameStateDTO;
 
@@ -21,17 +18,13 @@ public final class Player {
     private int handContribution;
     private final List<Card> cards = new ArrayList<>();
     private final ObjectOutputStream out;
-    private final BlockingQueue<Delivery> pendingDelivery = new ArrayBlockingQueue<>(1);
-    private final Thread sender;
-    private final AtomicBoolean sendFailureReported = new AtomicBoolean();
-    private volatile boolean senderClosed;
+    private boolean senderClosed;
 
     public Player(String id, String name, int chips, ObjectOutputStream out) {
         this.id = id;
         this.name = name;
         this.chips = chips;
         this.out = out;
-        sender = Thread.ofVirtual().name("poker-send-" + id).start(this::sendLoop);
     }
 
     public String getId() {
@@ -54,7 +47,10 @@ public final class Player {
     }
 
     public void addChips(int amount) {
-        chips = Math.addExact(chips, amount);
+        if (amount < 0) {
+            throw new IllegalArgumentException("Betrag darf nicht negativ sein.");
+        }
+        this.chips += amount;
     }
 
     public boolean isFolded() {
@@ -115,48 +111,24 @@ public final class Player {
         return cards;
     }
 
-    public void send(GameStateDTO state, Runnable onFailure) {
-        if (senderClosed) {
+    public synchronized void send(GameStateDTO state, Runnable onFailure) {
+        if (senderClosed || out == null) {
             return;
         }
 
-        Delivery delivery = new Delivery(state, onFailure);
-        while (!pendingDelivery.offer(delivery)) {
-            pendingDelivery.poll();
-        }
-    }
-
-    public void closeSender() {
-        senderClosed = true;
-        sender.interrupt();
-    }
-
-    private void sendLoop() {
-        Delivery delivery = null;
         try {
-            while (!senderClosed) {
-                delivery = pendingDelivery.take();
-                out.writeObject(delivery.state());
-                out.reset();
-                out.flush();
-                delivery = null;
-            }
-        } catch (InterruptedException ignored) {
-            Thread.currentThread().interrupt();
+            out.writeObject(state);
+            out.reset();
+            out.flush();
         } catch (IOException | RuntimeException exception) {
-            if (sendFailureReported.compareAndSet(false, true)) {
-                try {
-                    out.close();
-                } catch (IOException ignored) {
-                    // Das Schließen dient nur dazu, den Reader-Thread aufzuwecken.
-                }
-                if (delivery != null) {
-                    delivery.onFailure().run();
-                }
+            senderClosed = true;
+            if (onFailure != null) {
+                onFailure.run();
             }
         }
     }
 
-    private record Delivery(GameStateDTO state, Runnable onFailure) {
+    public synchronized void closeSender() {
+        senderClosed = true;
     }
 }

@@ -1,13 +1,13 @@
 package de.openpoker.server;
 
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
 import de.openpoker.common.model.Card;
+import de.openpoker.common.model.Suit;
 
 public final class HandEvaluator {
 
@@ -43,10 +43,6 @@ public final class HandEvaluator {
         }
     }
 
-    /**
-     * The tie breakers are ordered from most to least significant. For example,
-     * two pair stores [higher pair, lower pair, kicker].
-     */
     public record HandResult(HandRank rank, List<Integer> tieBreakers, String description)
             implements Comparable<HandResult> {
 
@@ -86,10 +82,11 @@ public final class HandEvaluator {
         }
 
         if (cards.size() < 5) {
-            List<Integer> highCards = cards.stream()
-                    .map(card -> card.rank().getValue())
-                    .sorted(Comparator.reverseOrder())
-                    .toList();
+            List<Integer> highCards = new ArrayList<>();
+            for (Card card : cards) {
+                highCards.add(card.rank().getValue());
+            }
+            highCards.sort(Collections.reverseOrder());
             return new HandResult(HandRank.HIGH_CARD, highCards, "Unvollständig");
         }
 
@@ -116,21 +113,35 @@ public final class HandEvaluator {
 
     private static HandResult evaluateFive(List<Card> cards) {
         Map<Integer, Integer> rankCounts = new HashMap<>();
+        List<Integer> ranksDescending = new ArrayList<>();
         for (Card card : cards) {
-            rankCounts.merge(card.rank().getValue(), 1, Integer::sum);
+            int val = card.rank().getValue();
+            ranksDescending.add(val);
+            rankCounts.put(val, rankCounts.getOrDefault(val, 0) + 1);
+        }
+        ranksDescending.sort(Collections.reverseOrder());
+
+        // Sortiere Gruppen: erst nach Häufigkeit (z.B. Drilling vor Paar), dann nach Kartenwert absteigend
+        List<Map.Entry<Integer, Integer>> groups = new ArrayList<>(rankCounts.entrySet());
+        groups.sort((a, b) -> {
+            int countCompare = Integer.compare(b.getValue(), a.getValue());
+            if (countCompare != 0) {
+                return countCompare;
+            }
+            return Integer.compare(b.getKey(), a.getKey());
+        });
+
+        // Flush prüfen: Haben alle 5 Karten dieselbe Farbe?
+        boolean flush = true;
+        Suit firstSuit = cards.get(0).suit();
+        for (Card card : cards) {
+            if (card.suit() != firstSuit) {
+                flush = false;
+                break;
+            }
         }
 
-        List<Integer> ranksDescending = cards.stream()
-                .map(card -> card.rank().getValue())
-                .sorted(Comparator.reverseOrder())
-                .toList();
-        List<Map.Entry<Integer, Integer>> groups = rankCounts.entrySet().stream()
-                .sorted(Map.Entry.<Integer, Integer>comparingByValue().reversed()
-                        .thenComparing(Map.Entry.<Integer, Integer>comparingByKey().reversed()))
-                .toList();
-
-        boolean flush = cards.stream().allMatch(card -> card.suit() == cards.get(0).suit());
-        int straightHigh = straightHigh(rankCounts.keySet().stream().toList());
+        int straightHigh = straightHigh(new ArrayList<>(rankCounts.keySet()));
 
         if (flush && straightHigh == 14) {
             return result(HandRank.ROYAL_FLUSH, List.of(14));
@@ -169,7 +180,10 @@ public final class HandEvaluator {
             return 0;
         }
 
-        List<Integer> sorted = ranks.stream().sorted().toList();
+        List<Integer> sorted = new ArrayList<>(ranks);
+        Collections.sort(sorted);
+
+        // Sonderfall: Wheel-Straße (Ass als 1: A-2-3-4-5)
         if (sorted.equals(List.of(2, 3, 4, 5, 14))) {
             return 5;
         }
@@ -182,7 +196,11 @@ public final class HandEvaluator {
     }
 
     private static List<Integer> groupRanks(List<Map.Entry<Integer, Integer>> groups) {
-        return groups.stream().map(Map.Entry::getKey).toList();
+        List<Integer> result = new ArrayList<>();
+        for (Map.Entry<Integer, Integer> entry : groups) {
+            result.add(entry.getKey());
+        }
+        return result;
     }
 
     private static HandResult result(HandRank rank, List<Integer> tieBreakers) {
