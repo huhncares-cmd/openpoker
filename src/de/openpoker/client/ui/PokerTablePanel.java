@@ -256,13 +256,11 @@ public final class PokerTablePanel extends JPanel {
             : player.lastAction();
 
         if (lastAction != null && !lastAction.isEmpty()) {
-            if (player.currentBet() > 0 && !player.folded() && !isWinner) {
-                lastAction += " · " + player.currentBet();
-            }
             g2.setFont(new Font("SansSerif", Font.BOLD, 10));
             int actW = g2.getFontMetrics().stringWidth(lastAction) + 12;
 
             Color actBg = isWinner ? new Color(255, 215, 0) :
+                          lastAction.contains("ALL-IN") ? new Color(215, 40, 20) :
                           lastAction.contains("RAISE") ? new Color(210, 130, 20) :
                           lastAction.contains("FOLD") ? new Color(190, 40, 40) :
                           new Color(40, 140, 60);

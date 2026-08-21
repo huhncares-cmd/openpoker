@@ -280,8 +280,8 @@ public final class PokerWindow extends JFrame {
 
         raise50Btn.setEnabled(myTurn && maxRaise >= 50);
         raise100Btn.setEnabled(myTurn && maxRaise >= 100);
-        allInBtn.setEnabled(myTurn && me.chips() > 0);
-        if (me != null && myTurn) {
+        allInBtn.setEnabled(myTurn && maxRaise > 0);
+        if (me != null && myTurn && maxRaise > 0) {
             allInBtn.setText("ALL-IN (" + me.chips() + ")");
         } else {
             allInBtn.setText("ALL-IN");
