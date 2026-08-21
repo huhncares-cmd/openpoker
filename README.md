@@ -116,3 +116,16 @@ Wenn ein Spieler mit wenigen Chips All-In geht, wird der Pot mathematisch korrek
    * **Haupttopf (Main Pot)**: Bildet sich aus dem kleinsten All-In-Beitrag multipliziert mit der Anzahl aller Mitspieler. Um diesen Pot spielen alle Spieler mit.
    * **Nebentöpfe (Side Pots)**: Entstehen für alle Einsätze, die über das All-In hinausgehen. Um diese Töpfe spielen nur die Spieler, die den höheren Betrag ebenfalls gezahlt haben.
 3. **Auszahlung**: Jeder Pot wird separat an den jeweils besten Spieler vergeben, der für diesen Teilpot qualifiziert ist.
+
+---
+
+## 👥 6. Aufgabenverteilung & Präsentationsschwerpunkte
+
+Das Projekt wurde modular in vier gleichwertige Kernbereiche aufgeteilt:
+
+| Teammitglied | Schwerpunktbereich | Zuständige Klassen | Hauptthemen in der Präsentation |
+| :--- | :--- | :--- | :--- |
+| **Konrad** | **Netzwerk-Stack & Datenfluss** | `Server.java`, `Client.java`, `PlayerAction.java`, `GameStateDTO.java` | TCP-Sockets, Multithreading (`poker-client-handler`, `poker-reader`), Objekt-Serialisierung, Information Hiding (Cheating-Schutz). |
+| **Leon** | **Spiellogik & State Machine** | `GameController.java`, `GamePhase.java`, `Deck.java`, `GameTable.java` | Zustandsautomat (Preflop bis Showdown), Pflichteinsätze (SB 10 / BB 20), rotierender Dealer-Button, Thread-Sicherheit via `synchronized` und `turnId`. |
+| **Raphael** | **Poker-Mathematik & Algorithmen** | `HandEvaluator.java`, `calculatePayouts()` in `GameController.java` | Hand-Kombinatorik ($\binom{7}{5} = 21$), Ranking-Logik & Wheel-Straße, Tie-Breaker/Kicker-Vergleich (`Comparable<HandResult>`), mathematische Side-Pot-Aufteilung bei All-Ins. |
+| **Alex** | **GUI, Custom Painting & UX** | `PokerWindow.java`, `PokerTablePanel.java`, `CardPanel.java` | 2D-Rendering mit `Graphics2D` (Casino-Filz, Mahagoni-Reling, plastische Karten), trigonometrische Spieler-Verteilung (`sin`/`cos`), responsive Steuerung & `ModernButton`. |
