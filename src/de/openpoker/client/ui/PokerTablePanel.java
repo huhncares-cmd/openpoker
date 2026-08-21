@@ -49,19 +49,15 @@ public final class PokerTablePanel extends JPanel {
         this.players = players == null ? List.of() : List.copyOf(players);
 
         cardsContainer.removeAll();
-        if (communityCards != null && !communityCards.isEmpty()) {
-            for (Card card : communityCards) {
-                CardPanel cp = new CardPanel();
-                cp.setCard(card);
-                cardsContainer.add(cp);
-            }
-        } else {
-            // Leere Platzhalter anzeigen, solange keine Tischkarten da sind (5 Slots)
-            for (int i = 0; i < 5; i++) {
-                CardPanel cp = new CardPanel();
+        int dealt = communityCards == null ? 0 : communityCards.size();
+        for (int i = 0; i < 5; i++) {
+            CardPanel cp = new CardPanel();
+            if (communityCards != null && i < dealt) {
+                cp.setCard(communityCards.get(i));
+            } else {
                 cp.setCard(null);
-                cardsContainer.add(cp);
             }
+            cardsContainer.add(cp);
         }
 
         revalidate();
@@ -157,7 +153,7 @@ public final class PokerTablePanel extends JPanel {
                 && (player.lastAction().contains("🏆") || player.lastAction().contains("GEWINNT"));
 
         // 1. Handkarten (Aufgedeckt beim Showdown oder verdeckte Karten-Rückseiten)
-        if (player.inHand()) {
+        if (player.inHand() && !player.folded()) {
             List<Card> cards = player.cards();
             if (cards != null && !cards.isEmpty()) {
                 // Aufgedeckte Showdown-Karten
@@ -171,7 +167,7 @@ public final class PokerTablePanel extends JPanel {
                 for (int i = 0; i < cards.size(); i++) {
                     drawMiniCard(g2, startX + i * (cardW + gap), cardY, cardW, cardH, cards.get(i), isWinner);
                 }
-            } else if (!player.folded()) {
+            } else {
                 // Verdeckte Handkarten (Kartenrücken)
                 int cardW = 18;
                 int cardH = 26;

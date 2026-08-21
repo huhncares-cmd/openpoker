@@ -639,8 +639,7 @@ public final class GameController {
         Player activePlayer = activePlayer();
         List<PlayerStateDTO> players = connectedPlayers.stream()
             .map(player -> {
-                boolean revealCards = (currentPhase == GamePhase.SHOWDOWN && player.isInHand() && !player.isFolded())
-                    || player == recipient;
+                boolean revealCards = (currentPhase == GamePhase.SHOWDOWN && player.isInHand() && !player.isFolded());
                 List<Card> cards = revealCards ? List.copyOf(player.getCards()) : null;
                 boolean isDealer = player.getId().equals(currentDealerId);
                 return new PlayerStateDTO(

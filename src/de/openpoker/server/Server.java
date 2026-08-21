@@ -62,7 +62,8 @@ public final class Server {
                 }
             }
         } catch (Exception e) {
-            System.out.println(playerName + " getrennt: " + e.getMessage());
+            String reason = (e instanceof java.io.EOFException) ? "Verbindung beendet" : (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+            System.out.println(playerName + " getrennt (" + reason + ").");
         } finally {
             if (player != null) {
                 gameController.removePlayer(player);

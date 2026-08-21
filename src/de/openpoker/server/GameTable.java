@@ -32,7 +32,7 @@ public final class GameTable {
         if (amount < 0) {
             throw new IllegalArgumentException("Der Einsatz darf nicht negativ sein.");
         }
-        pot = Math.addExact(pot, amount);
+        pot += amount;
     }
 
     public int takePot() {
