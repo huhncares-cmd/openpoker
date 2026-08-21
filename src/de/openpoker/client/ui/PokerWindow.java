@@ -1,10 +1,18 @@
 package de.openpoker.client.ui;
 
+import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.GradientPaint;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.List;
@@ -31,17 +39,17 @@ public final class PokerWindow extends JFrame {
     private static final int RAISE_AMOUNT = 50;
 
     private final PokerTablePanel tablePanel = new PokerTablePanel();
-    private final JPanel myCardsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
+    private final JPanel myCardsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 4));
     private final JTextArea chatArea = new JTextArea();
     private final JTextField chatInput = new JTextField(12);
     private final JLabel turnStatusLabel = new JLabel("Warte auf Server...", JLabel.CENTER);
 
-    private final JButton foldBtn = createStyledButton("FOLD", new Color(180, 40, 40));
-    private final JButton checkBtn = createStyledButton("CHECK", new Color(60, 90, 150));
-    private final JButton callBtn = createStyledButton("CALL", new Color(40, 140, 60));
-    private final JButton raiseBtn = createStyledButton("RAISE +50", new Color(200, 130, 20));
-    private final JButton nextRoundBtn = createStyledButton("NÄCHSTE RUNDE ➔", new Color(120, 50, 180));
-    private final JButton sendBtn = new JButton("Senden");
+    private final JButton foldBtn = new ModernButton("FOLD", new Color(195, 45, 45), new Color(150, 25, 25));
+    private final JButton checkBtn = new ModernButton("CHECK", new Color(45, 105, 200), new Color(25, 75, 160));
+    private final JButton callBtn = new ModernButton("CALL", new Color(38, 155, 70), new Color(22, 115, 48));
+    private final JButton raiseBtn = new ModernButton("RAISE +50", new Color(225, 130, 20), new Color(180, 95, 10));
+    private final JButton nextRoundBtn = new ModernButton("NÄCHSTE RUNDE ➔", new Color(135, 55, 195), new Color(95, 30, 150));
+    private final JButton sendBtn = new ModernButton("Senden", new Color(55, 65, 85), new Color(40, 48, 65));
 
     private transient Predicate<PlayerAction> actionListener;
     private GameStateDTO gameState;
@@ -49,17 +57,19 @@ public final class PokerWindow extends JFrame {
     private boolean turnActionPending;
 
     public PokerWindow() {
-        setTitle("OpenPoker Client");
-        setSize(980, 680);
+        setTitle("OpenPoker");
+        setSize(1020, 720);
+        setMinimumSize(new Dimension(880, 620));
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
+        getContentPane().setBackground(new Color(14, 16, 22));
         setLayout(new BorderLayout());
 
         JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.setBackground(new Color(20, 22, 28));
-        topPanel.setBorder(new EmptyBorder(8, 10, 8, 10));
-        turnStatusLabel.setFont(new Font("SansSerif", Font.BOLD, 17));
-        turnStatusLabel.setForeground(Color.CYAN);
+        topPanel.setBackground(new Color(18, 20, 28));
+        topPanel.setBorder(new EmptyBorder(10, 15, 10, 15));
+        turnStatusLabel.setFont(new Font("SansSerif", Font.BOLD, 16));
+        turnStatusLabel.setForeground(new Color(100, 200, 255));
         topPanel.add(turnStatusLabel, BorderLayout.CENTER);
         add(topPanel, BorderLayout.NORTH);
 
@@ -71,32 +81,42 @@ public final class PokerWindow extends JFrame {
 
     private JPanel createChatPanel() {
         JPanel chatPanel = new JPanel(new BorderLayout());
-        chatPanel.setPreferredSize(new Dimension(260, 0));
-        chatPanel.setBackground(new Color(28, 30, 36));
-        chatPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        chatPanel.setPreferredSize(new Dimension(280, 0));
+        chatPanel.setBackground(new Color(20, 23, 31));
+        chatPanel.setBorder(new EmptyBorder(12, 10, 12, 12));
 
-        JLabel chatTitle = new JLabel("💬 CHAT & LOGS", JLabel.CENTER);
-        chatTitle.setFont(new Font("SansSerif", Font.BOLD, 14));
-        chatTitle.setForeground(Color.LIGHT_GRAY);
-        chatTitle.setBorder(new EmptyBorder(0, 0, 8, 0));
+        JLabel chatTitle = new JLabel("💬 TISCH-CHAT & LOGS", JLabel.CENTER);
+        chatTitle.setFont(new Font("SansSerif", Font.BOLD, 13));
+        chatTitle.setForeground(new Color(190, 195, 210));
+        chatTitle.setBorder(new EmptyBorder(0, 0, 10, 0));
         chatPanel.add(chatTitle, BorderLayout.NORTH);
 
         chatArea.setEditable(false);
         chatArea.setLineWrap(true);
         chatArea.setWrapStyleWord(true);
-        chatArea.setBackground(new Color(18, 20, 24));
-        chatArea.setForeground(new Color(220, 220, 220));
+        chatArea.setBackground(new Color(13, 15, 20));
+        chatArea.setForeground(new Color(225, 230, 240));
         chatArea.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        chatArea.setBorder(new EmptyBorder(6, 8, 6, 8));
+
         JScrollPane scrollPane = new JScrollPane(chatArea);
         scrollPane.setBorder(null);
         chatPanel.add(scrollPane, BorderLayout.CENTER);
 
-        JPanel inputPanel = new JPanel(new BorderLayout(5, 0));
+        JPanel inputPanel = new JPanel(new BorderLayout(6, 0));
         inputPanel.setOpaque(false);
-        inputPanel.setBorder(new EmptyBorder(8, 0, 0, 0));
-        sendBtn.setFont(new Font("SansSerif", Font.BOLD, 12));
-        sendBtn.addActionListener(e -> sendChat());
+        inputPanel.setBorder(new EmptyBorder(10, 0, 0, 0));
+
+        chatInput.setBackground(new Color(28, 32, 44));
+        chatInput.setForeground(Color.WHITE);
+        chatInput.setCaretColor(Color.WHITE);
+        chatInput.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        chatInput.setBorder(new EmptyBorder(6, 8, 6, 8));
         chatInput.addActionListener(e -> sendChat());
+
+        sendBtn.setPreferredSize(new Dimension(80, 32));
+        sendBtn.addActionListener(e -> sendChat());
+
         inputPanel.add(chatInput, BorderLayout.CENTER);
         inputPanel.add(sendBtn, BorderLayout.EAST);
         chatPanel.add(inputPanel, BorderLayout.SOUTH);
@@ -105,18 +125,31 @@ public final class PokerWindow extends JFrame {
 
     private JPanel createActionPanel() {
         JPanel bottomPanel = new JPanel(new BorderLayout());
-        bottomPanel.setBackground(new Color(18, 20, 24));
-        bottomPanel.setBorder(new EmptyBorder(10, 10, 15, 10));
-        myCardsPanel.setOpaque(false);
-        bottomPanel.add(myCardsPanel, BorderLayout.NORTH);
+        bottomPanel.setBackground(new Color(16, 18, 25));
+        bottomPanel.setBorder(new EmptyBorder(8, 12, 14, 12));
 
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 8));
+        JPanel handContainer = new JPanel(new BorderLayout());
+        handContainer.setOpaque(false);
+
+        JLabel handLabel = new JLabel("DEINE HAND", JLabel.CENTER);
+        handLabel.setFont(new Font("SansSerif", Font.BOLD, 11));
+        handLabel.setForeground(new Color(160, 170, 190));
+        handLabel.setBorder(new EmptyBorder(0, 0, 2, 0));
+        handContainer.add(handLabel, BorderLayout.NORTH);
+
+        myCardsPanel.setOpaque(false);
+        handContainer.add(myCardsPanel, BorderLayout.CENTER);
+        bottomPanel.add(handContainer, BorderLayout.NORTH);
+
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 14, 8));
         buttonPanel.setOpaque(false);
+
         foldBtn.addActionListener(e -> sendTurnAction(PlayerAction.Fold::new));
         checkBtn.addActionListener(e -> sendTurnAction(PlayerAction.Check::new));
         callBtn.addActionListener(e -> sendTurnAction(PlayerAction.Call::new));
         raiseBtn.addActionListener(e -> sendTurnAction(turnId -> new PlayerAction.Raise(turnId, RAISE_AMOUNT)));
         nextRoundBtn.addActionListener(e -> sendAction(new PlayerAction.NextRound()));
+
         buttonPanel.add(foldBtn);
         buttonPanel.add(checkBtn);
         buttonPanel.add(callBtn);
@@ -124,16 +157,6 @@ public final class PokerWindow extends JFrame {
         buttonPanel.add(nextRoundBtn);
         bottomPanel.add(buttonPanel, BorderLayout.SOUTH);
         return bottomPanel;
-    }
-
-    private JButton createStyledButton(String text, Color background) {
-        JButton button = new JButton(text);
-        button.setFont(new Font("SansSerif", Font.BOLD, 14));
-        button.setBackground(background);
-        button.setForeground(Color.WHITE);
-        button.setFocusPainted(false);
-        button.setPreferredSize(new Dimension(150, 38));
-        return button;
     }
 
     private void sendChat() {
@@ -197,10 +220,17 @@ public final class PokerWindow extends JFrame {
         tablePanel.updateTable(state.pot(), state.communityCards(), players);
 
         myCardsPanel.removeAll();
-        if (state.myCards() != null) {
+        if (state.myCards() != null && !state.myCards().isEmpty()) {
             for (Card card : state.myCards()) {
                 CardPanel cardPanel = new CardPanel();
                 cardPanel.setCard(card);
+                myCardsPanel.add(cardPanel);
+            }
+        } else {
+            // Leere Hand-Platzhalter
+            for (int i = 0; i < 2; i++) {
+                CardPanel cardPanel = new CardPanel();
+                cardPanel.setCard(null);
                 myCardsPanel.add(cardPanel);
             }
         }
@@ -247,8 +277,8 @@ public final class PokerWindow extends JFrame {
             turnStatusLabel.setText(message == null || message.isBlank() ? "Warte auf spielbereite Spieler..." : message);
             turnStatusLabel.setForeground(new Color(255, 175, 0));
         } else if (state.phase() == GamePhase.SHOWDOWN) {
-            turnStatusLabel.setText("🏆 " + (message == null || message.isBlank() ? "Rundenende" : message));
-            turnStatusLabel.setForeground(new Color(200, 130, 255));
+            turnStatusLabel.setText("🏆 " + (message == null || message.isBlank() ? "Rundenende – Showdown" : message));
+            turnStatusLabel.setForeground(new Color(255, 215, 0));
         } else if (me != null && me.active()) {
             turnStatusLabel.setText("🎯 DU BIST AM ZUG (" + me.name() + ")");
             turnStatusLabel.setForeground(new Color(50, 225, 100));
@@ -271,5 +301,81 @@ public final class PokerWindow extends JFrame {
         return state.players().stream()
             .filter(player -> Objects.equals(player.id(), state.myPlayerId()))
             .findFirst();
+    }
+
+    private static final class ModernButton extends JButton {
+        private static final long serialVersionUID = 1L;
+        private final Color topColor;
+        private final Color bottomColor;
+        private boolean hover;
+
+        ModernButton(String text, Color topColor, Color bottomColor) {
+            super(text);
+            this.topColor = topColor;
+            this.bottomColor = bottomColor;
+            setFont(new Font("SansSerif", Font.BOLD, 13));
+            setForeground(Color.WHITE);
+            setFocusPainted(false);
+            setBorderPainted(false);
+            setContentAreaFilled(false);
+            setOpaque(false);
+            setCursor(new Cursor(Cursor.HAND_CURSOR));
+            setPreferredSize(new Dimension(145, 38));
+
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    hover = true;
+                    repaint();
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    hover = false;
+                    repaint();
+                }
+            });
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g;
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+            int w = getWidth();
+            int h = getHeight();
+            int arc = 10;
+
+            if (!isEnabled()) {
+                g2.setColor(new Color(45, 48, 58));
+                g2.fillRoundRect(0, 0, w, h, arc, arc);
+                g2.setColor(new Color(100, 105, 120));
+                g2.drawRoundRect(0, 0, w - 1, h - 1, arc, arc);
+                g2.setColor(new Color(120, 125, 140));
+                drawCenteredString(g2, getText(), w, h);
+                return;
+            }
+
+            Color c1 = hover ? topColor.brighter() : topColor;
+            Color c2 = hover ? bottomColor.brighter() : bottomColor;
+
+            GradientPaint gradient = new GradientPaint(0, 0, c1, 0, h, c2);
+            g2.setPaint(gradient);
+            g2.fillRoundRect(0, 0, w, h, arc, arc);
+
+            g2.setColor(new Color(255, 255, 255, hover ? 140 : 80));
+            g2.setStroke(new BasicStroke(1.2f));
+            g2.drawRoundRect(0, 0, w - 1, h - 1, arc, arc);
+
+            g2.setColor(Color.WHITE);
+            drawCenteredString(g2, getText(), w, h);
+        }
+
+        private void drawCenteredString(Graphics2D g2, String text, int w, int h) {
+            int strW = g2.getFontMetrics().stringWidth(text);
+            int strH = g2.getFontMetrics().getAscent();
+            g2.drawString(text, (w - strW) / 2, (h + strH) / 2 - 2);
+        }
     }
 }

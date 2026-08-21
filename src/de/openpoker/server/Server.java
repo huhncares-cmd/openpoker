@@ -31,7 +31,8 @@ public final class Server {
     }
 
     private void handleClient(Socket socket) {
-        String playerName = "Spieler " + playerCounter.getAndIncrement();
+        String defaultName = "Spieler " + playerCounter.getAndIncrement();
+        String playerName = defaultName;
         Player player = null;
 
         try (socket;
@@ -39,7 +40,20 @@ public final class Server {
              ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
             out.flush();
             in.setObjectInputFilter(Server::filterClientMessage);
-            player = gameController.addPlayer(playerName, out);
+
+            Object initial = in.readObject();
+            if (initial instanceof String customName && !customName.isBlank()) {
+                playerName = customName.trim();
+                if (playerName.length() > 20) {
+                    playerName = playerName.substring(0, 20);
+                }
+                player = gameController.addPlayer(playerName, out);
+            } else if (initial instanceof PlayerAction action) {
+                player = gameController.addPlayer(playerName, out);
+                gameController.handleAction(player, action);
+            } else {
+                player = gameController.addPlayer(playerName, out);
+            }
 
             while (!socket.isClosed()) {
                 Object message = in.readObject();

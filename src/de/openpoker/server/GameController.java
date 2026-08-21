@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
+import de.openpoker.common.model.Card;
 import de.openpoker.common.model.GamePhase;
 import de.openpoker.common.network.GameStateDTO;
 import de.openpoker.common.network.PlayerAction;
@@ -355,11 +356,14 @@ public final class GameController {
 
         Player winner = contenders().stream().findFirst().orElse(null);
         int pot = gameTable.takePot();
+        String winMessage = status;
         if (winner != null) {
             winner.addChips(pot);
-            addChat("🏆 SYSTEM: " + winner.getName() + " gewinnt " + pot + " Chips.");
+            playerLastActions.put(winner.getId(), "🏆 GEWINNT " + pot);
+            addChat("🏆 SYSTEM: " + winner.getName() + " gewinnt " + pot + " Chips (alle anderen haben gepasst).");
+            winMessage = winner.getName() + " gewinnt " + pot + " Chips!";
         }
-        broadcastGameState(status);
+        broadcastGameState(winMessage);
     }
 
     private void finishShowdown() {
@@ -383,19 +387,27 @@ public final class GameController {
         gameTable.takePot();
         payouts.forEach(Player::addChips);
 
+        StringBuilder winSummary = new StringBuilder();
         if (payouts.isEmpty()) {
             List<Player> winners = bestPlayers(eligiblePlayers, results);
             String names = winners.stream().map(Player::getName).reduce((left, right) -> left + ", " + right).orElse("-");
             addChat("🏆 SYSTEM: " + names + " gewinnt den Showdown mit "
                 + results.get(winners.getFirst()).description() + " (Pot: 0 Chips).");
+            winSummary.append(names).append(" gewinnt mit ").append(results.get(winners.getFirst()).description());
         } else {
             payouts.forEach((player, amount) -> {
                 HandEvaluator.HandResult result = results.get(player);
                 String reason = result == null ? " zurück" : " mit " + result.description();
+                playerLastActions.put(player.getId(), "🏆 +" + amount + (result != null ? " (" + result.description() + ")" : ""));
                 addChat("🏆 SYSTEM: " + player.getName() + " erhält " + amount + " Chips" + reason + ".");
+                if (winSummary.length() > 0) {
+                    winSummary.append(" | ");
+                }
+                winSummary.append(player.getName()).append(" gewinnt ").append(amount).append(" Chips (")
+                    .append(result != null ? result.description() : "Split").append(")");
             });
         }
-        broadcastGameState("Rundenende – Showdown.");
+        broadcastGameState(winSummary.toString());
     }
 
     private Map<Player, Integer> calculatePayouts(
@@ -560,16 +572,22 @@ public final class GameController {
     private GameStateDTO createGameState(Player recipient, String statusMessage) {
         Player activePlayer = activePlayer();
         List<PlayerStateDTO> players = connectedPlayers.stream()
-            .map(player -> new PlayerStateDTO(
-                player.getId(),
-                player.getName(),
-                player.getChips(),
-                player.getCurrentBet(),
-                player.isInHand(),
-                player.isInHand() && player.isFolded(),
-                player.isAllIn(),
-                currentPhase.isBettingPhase() && player == activePlayer,
-                playerLastActions.get(player.getId())))
+            .map(player -> {
+                boolean revealCards = (currentPhase == GamePhase.SHOWDOWN && player.isInHand() && !player.isFolded())
+                    || player == recipient;
+                List<Card> cards = revealCards ? List.copyOf(player.getCards()) : null;
+                return new PlayerStateDTO(
+                    player.getId(),
+                    player.getName(),
+                    player.getChips(),
+                    player.getCurrentBet(),
+                    player.isInHand(),
+                    player.isInHand() && player.isFolded(),
+                    player.isAllIn(),
+                    currentPhase.isBettingPhase() && player == activePlayer,
+                    playerLastActions.get(player.getId()),
+                    cards);
+            })
             .toList();
         return new GameStateDTO(
             gameTable.getPot(),
