@@ -65,10 +65,6 @@ public final class Player {
         return inHand;
     }
 
-    public void setInHand(boolean inHand) {
-        this.inHand = inHand;
-    }
-
     public boolean isAllIn() {
         return allIn;
     }
@@ -111,20 +107,19 @@ public final class Player {
         return cards;
     }
 
-    public synchronized void send(GameStateDTO state, Runnable onFailure) {
+    public synchronized boolean send(GameStateDTO state) {
         if (senderClosed || out == null) {
-            return;
+            return false;
         }
 
         try {
             out.writeObject(state);
             out.reset();
             out.flush();
-        } catch (IOException | RuntimeException exception) {
+            return true;
+        } catch (IOException exception) {
             senderClosed = true;
-            if (onFailure != null) {
-                onFailure.run();
-            }
+            return false;
         }
     }
 

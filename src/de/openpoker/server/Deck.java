@@ -27,8 +27,4 @@ public final class Deck {
     public Card drawCard() {
         return cards.remove(cards.size() - 1);
     }
-
-    public int remainingCards() {
-        return cards.size();
-    }
 }

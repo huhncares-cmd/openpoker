@@ -16,7 +16,6 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 import de.openpoker.common.model.Card;
-import de.openpoker.common.model.Rank;
 import de.openpoker.common.model.Suit;
 import de.openpoker.common.network.PlayerStateDTO;
 
@@ -25,7 +24,7 @@ public final class PokerTablePanel extends JPanel {
     private final JLabel potLabel = new JLabel("💰 POT: 0 CHIPS", JLabel.CENTER);
     private final JPanel cardsContainer = new JPanel(new FlowLayout(FlowLayout.CENTER, 14, 8));
 
-    private transient List<PlayerStateDTO> players = List.of();
+    private List<PlayerStateDTO> players = List.of();
 
     public PokerTablePanel() {
         setLayout(new BorderLayout());
@@ -46,13 +45,13 @@ public final class PokerTablePanel extends JPanel {
 
     public void updateTable(int pot, List<Card> communityCards, List<PlayerStateDTO> players) {
         potLabel.setText("💰 POT: " + String.format("%,d", pot) + " CHIPS");
-        this.players = players == null ? List.of() : List.copyOf(players);
+        this.players = players;
 
         cardsContainer.removeAll();
-        int dealt = communityCards == null ? 0 : communityCards.size();
+        int dealt = communityCards.size();
         for (int i = 0; i < 5; i++) {
             CardPanel cp = new CardPanel();
-            if (communityCards != null && i < dealt) {
+            if (i < dealt) {
                 cp.setCard(communityCards.get(i));
             } else {
                 cp.setCard(null);
@@ -151,12 +150,22 @@ public final class PokerTablePanel extends JPanel {
         boolean isActive = player.active();
         boolean isWinner = player.lastAction() != null
                 && (player.lastAction().contains("🏆") || player.lastAction().contains("GEWINNT"));
+        String name = player.name() == null ? "Spieler" : player.name();
 
-        // 1. Handkarten (Aufgedeckt beim Showdown oder verdeckte Karten-Rückseiten)
+        drawPlayerCards(g2, x, y, avatarRadius, player, isWinner);
+        drawWinnerCrown(g2, x, y, avatarRadius, player, isWinner);
+        drawAvatarCircle(g2, x, y, avatarRadius, player, name, isActive, isWinner);
+        drawDealerButton(g2, x, y, avatarRadius, player);
+        drawPlayerLabel(g2, x, y, avatarRadius, player, name);
+        drawLastAction(g2, x, y, avatarRadius, player, isWinner);
+    }
+
+    private void drawPlayerCards(
+            Graphics2D g2, int x, int y, int avatarRadius,
+            PlayerStateDTO player, boolean isWinner) {
         if (player.inHand() && !player.folded()) {
             List<Card> cards = player.cards();
             if (cards != null && !cards.isEmpty()) {
-                // Aufgedeckte Showdown-Karten
                 int cardW = 24;
                 int cardH = 34;
                 int gap = 4;
@@ -168,7 +177,6 @@ public final class PokerTablePanel extends JPanel {
                     drawMiniCard(g2, startX + i * (cardW + gap), cardY, cardW, cardH, cards.get(i), isWinner);
                 }
             } else {
-                // Verdeckte Handkarten (Kartenrücken)
                 int cardW = 18;
                 int cardH = 26;
                 int startX = x - 15;
@@ -177,17 +185,24 @@ public final class PokerTablePanel extends JPanel {
                 drawMiniCardBack(g2, startX + 12, cardY, cardW, cardH);
             }
         }
+    }
 
-        // 2. Kronen-Symbol für Gewinner
+    private void drawWinnerCrown(
+            Graphics2D g2, int x, int y, int avatarRadius,
+            PlayerStateDTO player, boolean isWinner) {
         if (isWinner) {
+            g2.setColor(new Color(255, 215, 0));
             g2.setFont(new Font("SansSerif", Font.PLAIN, 18));
             int crownY = (player.cards() != null && !player.cards().isEmpty())
                     ? y - avatarRadius - 44
                     : y - avatarRadius - 10;
             g2.drawString("👑", x - 9, crownY);
         }
+    }
 
-        // 3. Leuchtrand (Gold für Gewinner, Grün für aktiven Spieler)
+    private void drawAvatarCircle(
+            Graphics2D g2, int x, int y, int avatarRadius, PlayerStateDTO player,
+            String name, boolean isActive, boolean isWinner) {
         if (isWinner) {
             g2.setColor(new Color(255, 215, 0, 100));
             g2.fillOval(x - avatarRadius - 8, y - avatarRadius - 8, (avatarRadius + 8) * 2, (avatarRadius + 8) * 2);
@@ -198,7 +213,6 @@ public final class PokerTablePanel extends JPanel {
             g2.fillOval(x - avatarRadius - 4, y - avatarRadius - 4, (avatarRadius + 4) * 2, (avatarRadius + 4) * 2);
         }
 
-        // 4. Avatar-Kreis mit Farbverlauf
         GradientPaint avatarGrad = new GradientPaint(
             x - avatarRadius, y - avatarRadius,
             player.folded() || !player.inHand() ? new Color(60, 62, 70) : new Color(38, 42, 54),
@@ -212,15 +226,15 @@ public final class PokerTablePanel extends JPanel {
         g2.setStroke(new BasicStroke(isWinner ? 2.5f : 1.5f));
         g2.drawOval(x - avatarRadius, y - avatarRadius, avatarRadius * 2, avatarRadius * 2);
 
-        // 5. Initialen
-        String name = player.name() == null ? "Spieler" : player.name();
         String initial = name.length() > 0 ? name.substring(0, Math.min(3, name.length())) : "P";
         g2.setColor(Color.WHITE);
         g2.setFont(new Font("SansSerif", Font.BOLD, 12));
         int strW = g2.getFontMetrics().stringWidth(initial);
         g2.drawString(initial, x - strW / 2, y + 4);
+    }
 
-        // 5b. Dealer-Button
+    private void drawDealerButton(
+            Graphics2D g2, int x, int y, int avatarRadius, PlayerStateDTO player) {
         if (player.isDealer()) {
             int dbX = x + avatarRadius - 4;
             int dbY = y - avatarRadius + 4;
@@ -236,8 +250,11 @@ public final class PokerTablePanel extends JPanel {
             g2.setFont(new Font("SansSerif", Font.BOLD, 10));
             g2.drawString("D", dbX - 4, dbY + 4);
         }
+    }
 
-        // 6. Spieler-Name & Chips Badge
+    private void drawPlayerLabel(
+            Graphics2D g2, int x, int y, int avatarRadius,
+            PlayerStateDTO player, String name) {
         g2.setFont(new Font("SansSerif", Font.BOLD, 11));
         String playerLabel = name + " · 🪙 " + String.format("%,d", player.chips());
         int nameW = g2.getFontMetrics().stringWidth(playerLabel) + 12;
@@ -248,8 +265,11 @@ public final class PokerTablePanel extends JPanel {
         g2.drawRoundRect(x - nameW / 2, y + avatarRadius + 3, nameW, 18, 8, 8);
         g2.setColor(Color.WHITE);
         g2.drawString(playerLabel, x - (nameW - 12) / 2, y + avatarRadius + 16);
+    }
 
-        // 7. Letzte Aktion / Gewinner Badge
+    private void drawLastAction(
+            Graphics2D g2, int x, int y, int avatarRadius,
+            PlayerStateDTO player, boolean isWinner) {
         String lastAction = !player.inHand() ? "WARTET"
             : player.folded() ? "FOLD"
             : player.allIn() ? "ALL-IN"
@@ -291,8 +311,8 @@ public final class PokerTablePanel extends JPanel {
             boolean isRed = card.suit() == Suit.HEARTS || card.suit() == Suit.DIAMONDS;
             g2.setColor(isRed ? new Color(215, 35, 35) : new Color(28, 30, 38));
 
-            String rankStr = getRankShort(card.rank());
-            String suitSym = getSuitSymbol(card.suit());
+            String rankStr = card.rank().getSymbol();
+            String suitSym = card.suit().getSymbol();
 
             g2.setFont(new Font("SansSerif", Font.BOLD, 9));
             g2.drawString(rankStr, cx + 3, cy + 10);
@@ -326,32 +346,4 @@ public final class PokerTablePanel extends JPanel {
         g2.drawRoundRect(cx, cy, w, h, 5, 5);
     }
 
-    private static String getSuitSymbol(Suit suit) {
-        if (suit == null) return "?";
-        return switch (suit) {
-            case CLUBS -> "♣";
-            case DIAMONDS -> "♦";
-            case HEARTS -> "♥";
-            case SPADES -> "♠";
-        };
-    }
-
-    private static String getRankShort(Rank rank) {
-        if (rank == null) return "?";
-        return switch (rank) {
-            case TWO -> "2";
-            case THREE -> "3";
-            case FOUR -> "4";
-            case FIVE -> "5";
-            case SIX -> "6";
-            case SEVEN -> "7";
-            case EIGHT -> "8";
-            case NINE -> "9";
-            case TEN -> "10";
-            case JACK -> "J";
-            case QUEEN -> "Q";
-            case KING -> "K";
-            case ACE -> "A";
-        };
-    }
 }

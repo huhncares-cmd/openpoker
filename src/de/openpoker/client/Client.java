@@ -15,7 +15,7 @@ import de.openpoker.client.ui.PokerWindow;
 import de.openpoker.common.network.GameStateDTO;
 import de.openpoker.common.network.PlayerAction;
 
-public final class Client implements AutoCloseable {
+public final class Client {
     private static final String DEFAULT_HOST = "localhost";
     private static final int DEFAULT_PORT = 8888;
     private static final int CONNECT_TIMEOUT_MS = 5_000;
@@ -44,8 +44,8 @@ public final class Client implements AutoCloseable {
             PokerWindow pokerWindow = new PokerWindow();
             window = pokerWindow;
             pokerWindow.setTitle("OpenPoker Client - " + playerName);
-            pokerWindow.setActionListener(this::sendActionToServer);
-            pokerWindow.setCloseHandler(this::close);
+            pokerWindow.setActionListener(action -> sendActionToServer(action));
+            pokerWindow.setCloseHandler(() -> close());
             pokerWindow.setConnectionState(false, "Verbinde mit " + host + ":" + port + "...");
             pokerWindow.setVisible(true);
 
@@ -75,7 +75,8 @@ public final class Client implements AutoCloseable {
 
                     while (!closed) {
                         Object message = input.readObject();
-                        if (message instanceof GameStateDTO state) {
+                        if (message instanceof GameStateDTO) {
+                            GameStateDTO state = (GameStateDTO) message;
                             onUiThread(() -> pokerWindow.updateGameState(state));
                         }
                     }
@@ -133,7 +134,6 @@ public final class Client implements AutoCloseable {
         return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
     }
 
-    @Override
     public synchronized void close() {
         if (!closed) {
             closed = true;

@@ -1,5 +1,6 @@
 package de.openpoker.server;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -36,33 +37,37 @@ public final class Server {
         String playerName = defaultName;
         Player player = null;
 
-        try (socket;
-             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-             ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
+        try (Socket clientSocket = socket;
+             ObjectOutputStream out = new ObjectOutputStream(clientSocket.getOutputStream());
+             ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream())) {
             out.flush();
 
             Object initial = in.readObject();
-            if (initial instanceof String customName && !customName.isBlank()) {
-                playerName = customName.trim();
-                if (playerName.length() > 20) {
-                    playerName = playerName.substring(0, 20);
+            if (initial instanceof String) {
+                String customName = (String) initial;
+                if (!customName.isBlank()) {
+                    playerName = customName.trim();
+                    if (playerName.length() > 20) {
+                        playerName = playerName.substring(0, 20);
+                    }
                 }
-                player = gameController.addPlayer(playerName, out);
-            } else if (initial instanceof PlayerAction action) {
-                player = gameController.addPlayer(playerName, out);
-                gameController.handleAction(player, action);
-            } else {
-                player = gameController.addPlayer(playerName, out);
             }
+            player = gameController.addPlayer(playerName, out);
 
-            while (!socket.isClosed()) {
+            while (!clientSocket.isClosed()) {
                 Object message = in.readObject();
-                if (message instanceof PlayerAction action) {
+                if (message instanceof PlayerAction) {
+                    PlayerAction action = (PlayerAction) message;
                     gameController.handleAction(player, action);
                 }
             }
-        } catch (Exception e) {
-            String reason = (e instanceof java.io.EOFException) ? "Verbindung beendet" : (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+        } catch (EOFException exception) {
+            System.out.println(playerName + " getrennt (Verbindung beendet).");
+        } catch (Exception exception) {
+            String reason = exception.getMessage();
+            if (reason == null) {
+                reason = exception.getClass().getSimpleName();
+            }
             System.out.println(playerName + " getrennt (" + reason + ").");
         } finally {
             if (player != null) {

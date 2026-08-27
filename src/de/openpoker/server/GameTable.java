@@ -42,8 +42,6 @@ public final class GameTable {
     }
 
     public void dealCommunityCard() {
-        if (deck.remainingCards() > 0) {
-            communityCards.add(deck.drawCard());
-        }
+        communityCards.add(deck.drawCard());
     }
 }

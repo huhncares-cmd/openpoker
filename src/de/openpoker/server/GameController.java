@@ -1,18 +1,17 @@
 package de.openpoker.server;
 
 import java.io.ObjectOutputStream;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 
 import de.openpoker.common.model.Card;
 import de.openpoker.common.model.GamePhase;
+import de.openpoker.common.network.ActionType;
 import de.openpoker.common.network.GameStateDTO;
 import de.openpoker.common.network.PlayerAction;
 import de.openpoker.common.network.PlayerStateDTO;
@@ -31,7 +30,7 @@ public final class GameController {
     private final GameTable gameTable = new GameTable();
     private final List<Player> connectedPlayers = new ArrayList<>();
     private final List<Player> handPlayers = new ArrayList<>();
-    private final ArrayDeque<String> chatHistory = new ArrayDeque<>();
+    private final List<String> chatHistory = new ArrayList<>();
     private final Map<String, String> playerLastActions = new HashMap<>();
     private final Set<String> pendingPlayerIds = new HashSet<>();
 
@@ -127,83 +126,26 @@ public final class GameController {
     }
 
     private void startNewRoundInternal() {
-        List<Player> readyPlayers = connectedPlayers.stream()
-            .filter(player -> player.getChips() > 0)
-            .toList();
-
-        gameTable.getDeck().reset();
-        gameTable.getCommunityCards().clear();
-        gameTable.setPot(0);
-        currentBet = 0;
-        pendingPlayerIds.clear();
-        playerLastActions.clear();
-        handPlayers.clear();
-
-        for (Player player : connectedPlayers) {
-            player.prepareForHand(readyPlayers.contains(player));
-        }
+        List<Player> readyPlayers = findReadyPlayers();
+        resetRound(readyPlayers);
 
         if (readyPlayers.size() < 2) {
-            currentPhase = GamePhase.WAITING_FOR_PLAYERS;
-            activePlayerIndex = -1;
-            currentDealerId = null;
-            addChat("System: Mindestens zwei Spieler mit Chips sind erforderlich.");
-            broadcastGameState("Mindestens zwei Spieler mit Chips sind erforderlich.");
+            waitForPlayers();
             return;
         }
 
         handPlayers.addAll(readyPlayers);
-        for (int cardNumber = 0; cardNumber < 2; cardNumber++) {
-            for (Player player : handPlayers) {
-                player.getCards().add(gameTable.getDeck().drawCard());
-            }
-        }
+        dealHoleCards();
 
-        // Dealer-Position weiterrücken
         dealerIndex = (dealerIndex + 1) % readyPlayers.size();
         Player dealerPlayer = readyPlayers.get(dealerIndex);
         currentDealerId = dealerPlayer.getId();
-
         currentPhase = GamePhase.PREFLOP;
 
         if (smallBlind > 0 && bigBlind > 0) {
-            Player sbPlayer;
-            Player bbPlayer;
-            int firstActorIndex;
-
-            if (readyPlayers.size() == 2) {
-                // Heads-Up Regeln: Dealer ist Small Blind und beginnt vor dem Flop
-                sbPlayer = dealerPlayer;
-                bbPlayer = readyPlayers.get((dealerIndex + 1) % 2);
-                firstActorIndex = connectedPlayers.indexOf(sbPlayer);
-            } else {
-                sbPlayer = readyPlayers.get((dealerIndex + 1) % readyPlayers.size());
-                bbPlayer = readyPlayers.get((dealerIndex + 2) % readyPlayers.size());
-                Player utgPlayer = readyPlayers.get((dealerIndex + 3) % readyPlayers.size());
-                firstActorIndex = connectedPlayers.indexOf(utgPlayer);
-            }
-
-            int sbPaid = sbPlayer.commitChips(Math.min(smallBlind, sbPlayer.getChips()));
-            gameTable.addPot(sbPaid);
-            playerLastActions.put(sbPlayer.getId(), "SB " + sbPaid);
-
-            int bbPaid = bbPlayer.commitChips(Math.min(bigBlind, bbPlayer.getChips()));
-            gameTable.addPot(bbPaid);
-            playerLastActions.put(bbPlayer.getId(), "BB " + bbPaid);
-
-            currentBet = Math.max(sbPlayer.getCurrentBet(), bbPlayer.getCurrentBet());
-
-            addChat("System: Dealer ist " + dealerPlayer.getName() + ". SB: " + sbPlayer.getName() + " (" + sbPaid + "), BB: " + bbPlayer.getName() + " (" + bbPaid + ").");
-
-            preparePendingPlayers();
-            activePlayerIndex = findNextActionableIndex(firstActorIndex - 1);
-            if (activePlayerIndex < 0 || !pendingPlayerIds.contains(connectedPlayers.get(activePlayerIndex).getId())) {
-                activePlayerIndex = findNextPendingIndex(activePlayerIndex);
-            }
+            postBlindsAndSelectFirstPlayer(readyPlayers, dealerPlayer);
         } else {
-            int previousIndex = indexOfConnectedPlayer(previousStarterId);
-            activePlayerIndex = findNextActionableIndex(previousIndex);
-            preparePendingPlayers();
+            selectFirstPlayerWithoutBlinds();
         }
 
         if (activePlayerIndex >= 0 && activePlayerIndex < connectedPlayers.size()) {
@@ -215,17 +157,102 @@ public final class GameController {
         broadcastGameState("Neue Runde gestartet.");
     }
 
+    private List<Player> findReadyPlayers() {
+        List<Player> readyPlayers = new ArrayList<>();
+        for (Player player : connectedPlayers) {
+            if (player.getChips() > 0) {
+                readyPlayers.add(player);
+            }
+        }
+        return readyPlayers;
+    }
+
+    private void resetRound(List<Player> readyPlayers) {
+        gameTable.getDeck().reset();
+        gameTable.getCommunityCards().clear();
+        gameTable.setPot(0);
+        currentBet = 0;
+        pendingPlayerIds.clear();
+        playerLastActions.clear();
+        handPlayers.clear();
+
+        for (Player player : connectedPlayers) {
+            player.prepareForHand(readyPlayers.contains(player));
+        }
+    }
+
+    private void waitForPlayers() {
+        currentPhase = GamePhase.WAITING_FOR_PLAYERS;
+        activePlayerIndex = -1;
+        currentDealerId = null;
+        addChat("System: Mindestens zwei Spieler mit Chips sind erforderlich.");
+        broadcastGameState("Mindestens zwei Spieler mit Chips sind erforderlich.");
+    }
+
+    private void dealHoleCards() {
+        for (int cardNumber = 0; cardNumber < 2; cardNumber++) {
+            for (Player player : handPlayers) {
+                player.getCards().add(gameTable.getDeck().drawCard());
+            }
+        }
+    }
+
+    private void postBlindsAndSelectFirstPlayer(List<Player> readyPlayers, Player dealerPlayer) {
+        Player sbPlayer;
+        Player bbPlayer;
+        int firstActorIndex;
+
+        if (readyPlayers.size() == 2) {
+            // Heads-Up: Dealer ist Small Blind und beginnt vor dem Flop.
+            sbPlayer = dealerPlayer;
+            bbPlayer = readyPlayers.get((dealerIndex + 1) % 2);
+            firstActorIndex = connectedPlayers.indexOf(sbPlayer);
+        } else {
+            sbPlayer = readyPlayers.get((dealerIndex + 1) % readyPlayers.size());
+            bbPlayer = readyPlayers.get((dealerIndex + 2) % readyPlayers.size());
+            Player utgPlayer = readyPlayers.get((dealerIndex + 3) % readyPlayers.size());
+            firstActorIndex = connectedPlayers.indexOf(utgPlayer);
+        }
+
+        int sbPaid = sbPlayer.commitChips(Math.min(smallBlind, sbPlayer.getChips()));
+        gameTable.addPot(sbPaid);
+        playerLastActions.put(sbPlayer.getId(), "SB " + sbPaid);
+
+        int bbPaid = bbPlayer.commitChips(Math.min(bigBlind, bbPlayer.getChips()));
+        gameTable.addPot(bbPaid);
+        playerLastActions.put(bbPlayer.getId(), "BB " + bbPaid);
+
+        currentBet = Math.max(sbPlayer.getCurrentBet(), bbPlayer.getCurrentBet());
+        addChat("System: Dealer ist " + dealerPlayer.getName()
+            + ". SB: " + sbPlayer.getName() + " (" + sbPaid + ")"
+            + ", BB: " + bbPlayer.getName() + " (" + bbPaid + ").");
+
+        preparePendingPlayers();
+        activePlayerIndex = findNextActionableIndex(firstActorIndex - 1);
+        if (activePlayerIndex < 0
+                || !pendingPlayerIds.contains(connectedPlayers.get(activePlayerIndex).getId())) {
+            activePlayerIndex = findNextPendingIndex(activePlayerIndex);
+        }
+    }
+
+    private void selectFirstPlayerWithoutBlinds() {
+        int previousIndex = indexOfConnectedPlayer(previousStarterId);
+        activePlayerIndex = findNextActionableIndex(previousIndex);
+        preparePendingPlayers();
+    }
+
     public synchronized void handleAction(Player player, PlayerAction action) {
-        if (player == null || action == null || !connectedPlayers.contains(player)) {
+        if (!connectedPlayers.contains(player)) {
             return;
         }
 
-        if (action instanceof PlayerAction.Chat chat) {
-            handleChat(player, chat.message());
+        ActionType actionType = action.getType();
+        if (actionType == ActionType.CHAT) {
+            handleChat(player, action.getMessage());
             return;
         }
 
-        if (action instanceof PlayerAction.NextRound) {
+        if (actionType == ActionType.NEXT_ROUND) {
             if (currentPhase == GamePhase.SHOWDOWN) {
                 startNewRoundInternal();
             } else {
@@ -245,26 +272,26 @@ public final class GameController {
             return;
         }
 
-        long submittedTurnId = switch (action) {
-            case PlayerAction.Fold fold -> fold.turnId();
-            case PlayerAction.Check check -> check.turnId();
-            case PlayerAction.Call call -> call.turnId();
-            case PlayerAction.Raise raise -> raise.turnId();
-            case PlayerAction.Chat ignored -> throw new IllegalStateException("Chat wurde bereits behandelt.");
-            case PlayerAction.NextRound ignored -> throw new IllegalStateException("Rundenwechsel wurde bereits behandelt.");
-        };
-        if (submittedTurnId != turnId) {
+        if (action.getTurnId() != turnId) {
             sendGameState(player, "Diese Aktion gehört zu einem bereits beendeten Zug.");
             return;
         }
 
-        switch (action) {
-            case PlayerAction.Fold ignored -> handleFold(player);
-            case PlayerAction.Check ignored -> handleCheck(player);
-            case PlayerAction.Call ignored -> handleCall(player);
-            case PlayerAction.Raise raise -> handleRaise(player, raise.amount());
-            case PlayerAction.Chat ignored -> throw new IllegalStateException("Chat wurde bereits behandelt.");
-            case PlayerAction.NextRound ignored -> throw new IllegalStateException("Rundenwechsel wurde bereits behandelt.");
+        switch (actionType) {
+            case FOLD:
+                handleFold(player);
+                break;
+            case CHECK:
+                handleCheck(player);
+                break;
+            case CALL:
+                handleCall(player);
+                break;
+            case RAISE:
+                handleRaise(player, action.getAmount());
+                break;
+            default:
+                break;
         }
     }
 
@@ -359,10 +386,11 @@ public final class GameController {
             + (player.isAllIn() ? " (ALL-IN)." : "."));
 
         pendingPlayerIds.clear();
-        connectedPlayers.stream()
-            .filter(other -> other != player && canAct(other))
-            .map(Player::getId)
-            .forEach(pendingPlayerIds::add);
+        for (Player other : connectedPlayers) {
+            if (other != player && canAct(other)) {
+                pendingPlayerIds.add(other.getId());
+            }
+        }
         finishAction(player.getName() + " erhöht um " + raiseAmount + ".");
     }
 
@@ -379,30 +407,32 @@ public final class GameController {
     private void advancePhaseUntilActionIsNeeded() {
         while (currentPhase.isBettingPhase()) {
             switch (currentPhase) {
-                case PREFLOP -> {
+                case PREFLOP:
                     currentPhase = GamePhase.FLOP;
                     dealCommunityCards(3);
                     addChat("System: FLOP – drei Tischkarten wurden aufgedeckt.");
-                }
-                case FLOP -> {
+                    break;
+                case FLOP:
                     currentPhase = GamePhase.TURN;
                     dealCommunityCards(1);
                     addChat("System: TURN – die vierte Tischkarte wurde aufgedeckt.");
-                }
-                case TURN -> {
+                    break;
+                case TURN:
                     currentPhase = GamePhase.RIVER;
                     dealCommunityCards(1);
                     addChat("System: RIVER – die fünfte Tischkarte wurde aufgedeckt.");
-                }
-                case RIVER -> {
+                    break;
+                case RIVER:
                     finishShowdown();
                     return;
-                }
-                case WAITING_FOR_PLAYERS, SHOWDOWN -> throw new IllegalStateException("Ungültige Spielphase.");
+                default:
+                    throw new IllegalStateException("Ungültige Spielphase.");
             }
 
             currentBet = 0;
-            handPlayers.forEach(Player::resetBettingRound);
+            for (Player player : handPlayers) {
+                player.resetBettingRound();
+            }
             playerLastActions.clear();
             preparePendingPlayers();
             if (!pendingPlayerIds.isEmpty()) {
@@ -414,54 +444,76 @@ public final class GameController {
     }
 
     private void finishHandAfterFolds(String status) {
-        currentPhase = GamePhase.SHOWDOWN;
-        currentBet = 0;
-        activePlayerIndex = -1;
-        pendingPlayerIds.clear();
-        handPlayers.forEach(Player::resetBettingRound);
+        enterShowdown();
 
-        Player winner = contenders().stream().findFirst().orElse(null);
+        List<Player> remainingPlayers = contenders();
+        Player winner = remainingPlayers.isEmpty() ? null : remainingPlayers.get(0);
         int pot = gameTable.takePot();
         String winMessage = status;
         if (winner != null) {
             winner.addChips(pot);
             playerLastActions.put(winner.getId(), "🏆 GEWINNT " + pot);
-            addChat("🏆 SYSTEM: " + winner.getName() + " gewinnt " + pot + " Chips (alle anderen haben gepasst).");
+            addChat("🏆 SYSTEM: " + winner.getName() + " gewinnt " + pot
+                + " Chips (alle anderen haben gepasst).");
             winMessage = winner.getName() + " gewinnt " + pot + " Chips!";
         }
         broadcastGameState(winMessage);
     }
 
-    private void finishShowdown() {
+    private void enterShowdown() {
         currentPhase = GamePhase.SHOWDOWN;
         currentBet = 0;
         activePlayerIndex = -1;
         pendingPlayerIds.clear();
-        handPlayers.forEach(Player::resetBettingRound);
+        for (Player player : handPlayers) {
+            player.resetBettingRound();
+        }
+    }
+
+    private void finishShowdown() {
+        enterShowdown();
 
         List<Player> eligiblePlayers = contenders();
+        Map<Player, HandEvaluator.HandResult> results = evaluateHands(eligiblePlayers);
+        int pot = gameTable.getPot();
+        Map<Player, Integer> payouts = calculatePayouts(eligiblePlayers, results, pot);
+        gameTable.takePot();
+        applyPayouts(payouts);
+        broadcastGameState(createWinSummary(eligiblePlayers, results, payouts));
+    }
+
+    private Map<Player, HandEvaluator.HandResult> evaluateHands(List<Player> players) {
         Map<Player, HandEvaluator.HandResult> results = new HashMap<>();
-        for (Player player : eligiblePlayers) {
+        for (Player player : players) {
             HandEvaluator.HandResult result = HandEvaluator.evaluateHand(
                 player.getCards(), gameTable.getCommunityCards());
             results.put(player, result);
             addChat("System: " + player.getName() + " zeigt " + result.description() + ".");
         }
+        return results;
+    }
 
-        int pot = gameTable.getPot();
-        Map<Player, Integer> payouts = calculatePayouts(eligiblePlayers, results, pot);
-        gameTable.takePot();
-        payouts.forEach(Player::addChips);
+    private void applyPayouts(Map<Player, Integer> payouts) {
+        for (Map.Entry<Player, Integer> payout : payouts.entrySet()) {
+            payout.getKey().addChips(payout.getValue());
+        }
+    }
 
+    private String createWinSummary(
+            List<Player> eligiblePlayers,
+            Map<Player, HandEvaluator.HandResult> results,
+            Map<Player, Integer> payouts) {
         StringBuilder winSummary = new StringBuilder();
         if (payouts.isEmpty()) {
             List<Player> winners = bestPlayers(eligiblePlayers, results);
-            String names = winners.stream().map(Player::getName).reduce((left, right) -> left + ", " + right).orElse("-");
+            String names = playerNames(winners);
             addChat("🏆 SYSTEM: " + names + " gewinnt den Showdown mit "
-                + results.get(winners.getFirst()).description() + " (Pot: 0 Chips).");
-            winSummary.append(names).append(" gewinnt mit ").append(results.get(winners.getFirst()).description());
+                + results.get(winners.get(0)).description() + " (Pot: 0 Chips).");
+            winSummary.append(names).append(" gewinnt mit ").append(results.get(winners.get(0)).description());
         } else {
-            payouts.forEach((player, amount) -> {
+            for (Map.Entry<Player, Integer> payout : payouts.entrySet()) {
+                Player player = payout.getKey();
+                int amount = payout.getValue();
                 HandEvaluator.HandResult result = results.get(player);
                 String reason = result == null ? " zurück" : " mit " + result.description();
                 playerLastActions.put(player.getId(), "🏆 +" + amount + (result != null ? " (" + result.description() + ")" : ""));
@@ -471,40 +523,62 @@ public final class GameController {
                 }
                 winSummary.append(player.getName()).append(" gewinnt ").append(amount).append(" Chips (")
                     .append(result != null ? result.description() : "Split").append(")");
-            });
+            }
         }
-        broadcastGameState(winSummary.toString());
+        return winSummary.toString();
+    }
+
+    private String playerNames(List<Player> players) {
+        StringBuilder names = new StringBuilder();
+        for (Player player : players) {
+            if (names.length() > 0) {
+                names.append(", ");
+            }
+            names.append(player.getName());
+        }
+        return names.length() == 0 ? "-" : names.toString();
     }
 
     private Map<Player, Integer> calculatePayouts(
             List<Player> eligiblePlayers,
             Map<Player, HandEvaluator.HandResult> results,
             int pot) {
-        Map<Player, Integer> payouts = new LinkedHashMap<>();
+        Map<Player, Integer> payouts = new HashMap<>();
         if (pot == 0 || eligiblePlayers.isEmpty()) {
             return payouts;
         }
 
-        TreeSet<Integer> contributionLevels = new TreeSet<>();
-        handPlayers.stream()
-            .map(Player::getHandContribution)
-            .filter(contribution -> contribution > 0)
-            .forEach(contributionLevels::add);
+        List<Integer> contributionLevels = new ArrayList<>();
+        for (Player player : handPlayers) {
+            int contribution = player.getHandContribution();
+            if (contribution > 0 && !contributionLevels.contains(contribution)) {
+                contributionLevels.add(contribution);
+            }
+        }
+        Collections.sort(contributionLevels);
 
         int previousLevel = 0;
         int distributed = 0;
         for (int level : contributionLevels) {
-            List<Player> contributors = handPlayers.stream()
-                .filter(player -> player.getHandContribution() >= level)
-                .toList();
+            List<Player> contributors = new ArrayList<>();
+            for (Player player : handPlayers) {
+                if (player.getHandContribution() >= level) {
+                    contributors.add(player);
+                }
+            }
             int sidePot = (level - previousLevel) * contributors.size();
-            List<Player> candidates = eligiblePlayers.stream()
-                .filter(player -> player.getHandContribution() >= level)
-                .toList();
+            List<Player> candidates = new ArrayList<>();
+            for (Player player : eligiblePlayers) {
+                if (player.getHandContribution() >= level) {
+                    candidates.add(player);
+                }
+            }
 
             if (candidates.isEmpty()) {
                 int refund = level - previousLevel;
-                contributors.forEach(player -> payouts.merge(player, refund, Integer::sum));
+                for (Player player : contributors) {
+                    addPayout(payouts, player, refund);
+                }
             } else {
                 distribute(sidePot, bestPlayers(candidates, results), payouts);
             }
@@ -523,28 +597,50 @@ public final class GameController {
     private List<Player> bestPlayers(
             List<Player> candidates,
             Map<Player, HandEvaluator.HandResult> results) {
-        HandEvaluator.HandResult best = candidates.stream()
-            .map(results::get)
-            .max(HandEvaluator.HandResult::compareTo)
-            .orElseThrow();
-        return candidates.stream()
-            .filter(player -> results.get(player).compareTo(best) == 0)
-            .toList();
+        HandEvaluator.HandResult best = results.get(candidates.get(0));
+        for (Player player : candidates) {
+            HandEvaluator.HandResult current = results.get(player);
+            if (current.compareTo(best) > 0) {
+                best = current;
+            }
+        }
+
+        List<Player> winners = new ArrayList<>();
+        for (Player player : candidates) {
+            if (results.get(player).compareTo(best) == 0) {
+                winners.add(player);
+            }
+        }
+        return winners;
     }
 
     private void distribute(int amount, List<Player> winners, Map<Player, Integer> payouts) {
         int share = amount / winners.size();
         int remainder = amount % winners.size();
         for (int index = 0; index < winners.size(); index++) {
-            payouts.merge(winners.get(index), share + (index < remainder ? 1 : 0), Integer::sum);
+            int winnerAmount = share + (index < remainder ? 1 : 0);
+            addPayout(payouts, winners.get(index), winnerAmount);
+        }
+    }
+
+    private void addPayout(Map<Player, Integer> payouts, Player player, int amount) {
+        Integer currentAmount = payouts.get(player);
+        if (currentAmount == null) {
+            payouts.put(player, amount);
+        } else {
+            payouts.put(player, currentAmount + amount);
         }
     }
 
     private void preparePendingPlayers() {
         pendingPlayerIds.clear();
-        List<Player> actionablePlayers = connectedPlayers.stream().filter(this::canAct).toList();
-        if (actionablePlayers.size() >= 2) {
-            actionablePlayers.stream().map(Player::getId).forEach(pendingPlayerIds::add);
+        for (Player player : connectedPlayers) {
+            if (canAct(player)) {
+                pendingPlayerIds.add(player.getId());
+            }
+        }
+        if (pendingPlayerIds.size() < 2) {
+            pendingPlayerIds.clear();
         }
     }
 
@@ -553,11 +649,23 @@ public final class GameController {
     }
 
     private List<Player> contenders() {
-        return handPlayers.stream().filter(player -> !player.isFolded()).toList();
+        List<Player> result = new ArrayList<>();
+        for (Player player : handPlayers) {
+            if (!player.isFolded()) {
+                result.add(player);
+            }
+        }
+        return result;
     }
 
     private int playersReadyForHand() {
-        return (int) connectedPlayers.stream().filter(player -> player.getChips() > 0).count();
+        int count = 0;
+        for (Player player : connectedPlayers) {
+            if (player.getChips() > 0) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private Player activePlayer() {
@@ -584,7 +692,7 @@ public final class GameController {
             return -1;
         }
         for (int offset = 1; offset <= connectedPlayers.size(); offset++) {
-            int index = Math.floorMod(fromExclusive + offset, connectedPlayers.size());
+            int index = (fromExclusive + offset) % connectedPlayers.size();
             if (canAct(connectedPlayers.get(index))) {
                 return index;
             }
@@ -597,7 +705,7 @@ public final class GameController {
             return -1;
         }
         for (int offset = 1; offset <= connectedPlayers.size(); offset++) {
-            int index = Math.floorMod(fromExclusive + offset, connectedPlayers.size());
+            int index = (fromExclusive + offset) % connectedPlayers.size();
             if (pendingPlayerIds.contains(connectedPlayers.get(index).getId())) {
                 return index;
             }
@@ -613,19 +721,23 @@ public final class GameController {
 
     private void addChat(String message) {
         if (chatHistory.size() == CHAT_HISTORY_LIMIT) {
-            chatHistory.removeFirst();
+            chatHistory.remove(0);
         }
-        chatHistory.addLast(message);
+        chatHistory.add(message);
     }
 
     private void broadcastGameState(String statusMessage) {
-        for (Player player : List.copyOf(connectedPlayers)) {
+        List<Player> recipients = new ArrayList<>(connectedPlayers);
+        for (Player player : recipients) {
             sendGameState(player, statusMessage);
         }
     }
 
     private void sendGameState(Player recipient, String statusMessage) {
-        recipient.send(createGameState(recipient, statusMessage), () -> removePlayer(recipient));
+        GameStateDTO state = createGameState(recipient, statusMessage);
+        if (!recipient.send(state)) {
+            removePlayer(recipient);
+        }
     }
 
     synchronized GameStateDTO snapshot(Player recipient) {
@@ -637,35 +749,36 @@ public final class GameController {
 
     private GameStateDTO createGameState(Player recipient, String statusMessage) {
         Player activePlayer = activePlayer();
-        List<PlayerStateDTO> players = connectedPlayers.stream()
-            .map(player -> {
-                boolean revealCards = (currentPhase == GamePhase.SHOWDOWN && player.isInHand() && !player.isFolded());
-                List<Card> cards = revealCards ? List.copyOf(player.getCards()) : null;
-                boolean isDealer = player.getId().equals(currentDealerId);
-                return new PlayerStateDTO(
-                    player.getId(),
-                    player.getName(),
-                    player.getChips(),
-                    player.getCurrentBet(),
-                    player.isInHand(),
-                    player.isInHand() && player.isFolded(),
-                    player.isAllIn(),
-                    currentPhase.isBettingPhase() && player == activePlayer,
-                    playerLastActions.get(player.getId()),
-                    cards,
-                    isDealer);
-            })
-            .toList();
+        List<PlayerStateDTO> players = new ArrayList<>();
+        for (Player player : connectedPlayers) {
+            boolean revealCards = currentPhase == GamePhase.SHOWDOWN
+                && player.isInHand() && !player.isFolded();
+            List<Card> cards = revealCards ? new ArrayList<>(player.getCards()) : null;
+            boolean isDealer = player.getId().equals(currentDealerId);
+            PlayerStateDTO playerState = new PlayerStateDTO(
+                player.getId(),
+                player.getName(),
+                player.getChips(),
+                player.getCurrentBet(),
+                player.isInHand(),
+                player.isInHand() && player.isFolded(),
+                player.isAllIn(),
+                currentPhase.isBettingPhase() && player == activePlayer,
+                playerLastActions.get(player.getId()),
+                cards,
+                isDealer);
+            players.add(playerState);
+        }
         return new GameStateDTO(
             gameTable.getPot(),
             currentBet,
-            List.copyOf(gameTable.getCommunityCards()),
-            List.copyOf(recipient.getCards()),
+            new ArrayList<>(gameTable.getCommunityCards()),
+            new ArrayList<>(recipient.getCards()),
             recipient.getId(),
             currentPhase,
             turnId,
             players,
             statusMessage,
-            List.copyOf(chatHistory));
+            new ArrayList<>(chatHistory));
     }
 }
