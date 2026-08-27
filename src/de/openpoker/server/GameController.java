@@ -22,8 +22,6 @@ public final class GameController {
     static final int DEFAULT_SMALL_BLIND = 10;
     static final int DEFAULT_BIG_BLIND = 20;
     static final int MIN_RAISE = 50;
-    private static final int CHAT_HISTORY_LIMIT = 100;
-    private static final int CHAT_MESSAGE_LIMIT = 500;
 
     private final int smallBlind;
     private final int bigBlind;
@@ -48,8 +46,8 @@ public final class GameController {
     }
 
     public GameController(int smallBlind, int bigBlind) {
-        this.smallBlind = Math.max(0, smallBlind);
-        this.bigBlind = Math.max(0, bigBlind);
+        this.smallBlind = smallBlind;
+        this.bigBlind = bigBlind;
         addChat("System: Willkommen beim OpenPoker Server!");
     }
 
@@ -290,20 +288,11 @@ public final class GameController {
             case RAISE:
                 handleRaise(player, action.getAmount());
                 break;
-            default:
-                break;
         }
     }
 
     private void handleChat(Player player, String rawMessage) {
-        if (rawMessage == null || rawMessage.isBlank()) {
-            return;
-        }
-
         String message = rawMessage.strip();
-        if (message.length() > CHAT_MESSAGE_LIMIT) {
-            message = message.substring(0, CHAT_MESSAGE_LIMIT);
-        }
         addChat(player.getName() + ": " + message);
         broadcastGameState("Neue Chat-Nachricht.");
     }
@@ -425,8 +414,6 @@ public final class GameController {
                 case RIVER:
                     finishShowdown();
                     return;
-                default:
-                    throw new IllegalStateException("Ungültige Spielphase.");
             }
 
             currentBet = 0;
@@ -558,7 +545,6 @@ public final class GameController {
         Collections.sort(contributionLevels);
 
         int previousLevel = 0;
-        int distributed = 0;
         for (int level : contributionLevels) {
             List<Player> contributors = new ArrayList<>();
             for (Player player : handPlayers) {
@@ -582,14 +568,7 @@ public final class GameController {
             } else {
                 distribute(sidePot, bestPlayers(candidates, results), payouts);
             }
-            distributed += sidePot;
             previousLevel = level;
-        }
-
-        if (distributed < pot) {
-            distribute(pot - distributed, bestPlayers(eligiblePlayers, results), payouts);
-        } else if (distributed > pot) {
-            throw new IllegalStateException("Spielereinsätze übersteigen den Pot.");
         }
         return payouts;
     }
@@ -720,9 +699,6 @@ public final class GameController {
     }
 
     private void addChat(String message) {
-        if (chatHistory.size() == CHAT_HISTORY_LIMIT) {
-            chatHistory.remove(0);
-        }
         chatHistory.add(message);
     }
 
@@ -741,9 +717,6 @@ public final class GameController {
     }
 
     synchronized GameStateDTO snapshot(Player recipient) {
-        if (!connectedPlayers.contains(recipient)) {
-            throw new IllegalArgumentException("Der Spieler ist nicht verbunden.");
-        }
         return createGameState(recipient, "");
     }
 

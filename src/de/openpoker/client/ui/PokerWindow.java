@@ -197,7 +197,7 @@ public final class PokerWindow extends JFrame {
     }
 
     private boolean sendAction(PlayerAction action) {
-        return connected && actionListener != null && actionListener.sendAction(action);
+        return connected && actionListener.sendAction(action);
     }
 
     private void sendTurnAction(ActionType type) {
@@ -205,7 +205,7 @@ public final class PokerWindow extends JFrame {
     }
 
     private void sendTurnAction(ActionType type, int amount) {
-        if (!connected || actionListener == null || gameState == null || turnActionPending) {
+        if (!connected || gameState == null || turnActionPending) {
             return;
         }
         PlayerAction action = new PlayerAction(type, gameState.turnId(), amount);
@@ -225,10 +225,10 @@ public final class PokerWindow extends JFrame {
         refreshControls();
 
         if (!connected) {
-            turnStatusLabel.setText(message == null || message.isBlank() ? "Verbindung getrennt" : message);
+            turnStatusLabel.setText(message.isBlank() ? "Verbindung getrennt" : message);
             turnStatusLabel.setForeground(new Color(240, 90, 90));
         } else if (gameState == null) {
-            turnStatusLabel.setText(message == null || message.isBlank() ? "Verbunden, warte auf Spielstand..." : message);
+            turnStatusLabel.setText(message.isBlank() ? "Verbunden, warte auf Spielstand..." : message);
             turnStatusLabel.setForeground(new Color(100, 180, 255));
         } else {
             updateStatus(gameState);
@@ -283,7 +283,7 @@ public final class PokerWindow extends JFrame {
         foldBtn.setEnabled(myTurn);
         checkBtn.setEnabled(myTurn && toCall == 0);
         callBtn.setEnabled(myTurn && toCall > 0 && me.chips() > 0);
-        callBtn.setText(toCall > 0 && me != null ? "CALL " + Math.min(toCall, me.chips()) : "CALL");
+        callBtn.setText(toCall > 0 ? "CALL " + Math.min(toCall, me.chips()) : "CALL");
 
         raise50Btn.setEnabled(myTurn && maxRaise >= 50);
         raise100Btn.setEnabled(myTurn && maxRaise >= 100);
@@ -312,10 +312,10 @@ public final class PokerWindow extends JFrame {
         String message = state.statusMessage();
 
         if (state.phase() == GamePhase.WAITING_FOR_PLAYERS) {
-            turnStatusLabel.setText(message == null || message.isBlank() ? "Warte auf spielbereite Spieler..." : message);
+            turnStatusLabel.setText(message.isBlank() ? "Warte auf spielbereite Spieler..." : message);
             turnStatusLabel.setForeground(new Color(255, 175, 0));
         } else if (state.phase() == GamePhase.SHOWDOWN) {
-            turnStatusLabel.setText("🏆 " + (message == null || message.isBlank() ? "Rundenende – Showdown" : message));
+            turnStatusLabel.setText("🏆 " + (message.isBlank() ? "Rundenende – Showdown" : message));
             turnStatusLabel.setForeground(new Color(255, 215, 0));
         } else if (me != null && me.active()) {
             turnStatusLabel.setText("🎯 DU BIST AM ZUG (" + me.name() + ")");
@@ -327,7 +327,7 @@ public final class PokerWindow extends JFrame {
             turnStatusLabel.setText("⏳ Warte auf 2. Spieler... (" + players.size() + "/2)");
             turnStatusLabel.setForeground(new Color(255, 175, 0));
         } else {
-            turnStatusLabel.setText(message == null || message.isBlank() ? "Spiel läuft..." : message);
+            turnStatusLabel.setText(message.isBlank() ? "Spiel läuft..." : message);
             turnStatusLabel.setForeground(new Color(100, 180, 255));
         }
     }

@@ -40,16 +40,10 @@ public final class Player {
     }
 
     public void setChips(int chips) {
-        if (chips < 0) {
-            throw new IllegalArgumentException("Chips dürfen nicht negativ sein.");
-        }
         this.chips = chips;
     }
 
     public void addChips(int amount) {
-        if (amount < 0) {
-            throw new IllegalArgumentException("Betrag darf nicht negativ sein.");
-        }
         this.chips += amount;
     }
 
@@ -91,10 +85,6 @@ public final class Player {
     }
 
     public int commitChips(int requestedAmount) {
-        if (requestedAmount < 0) {
-            throw new IllegalArgumentException("Der Einsatz darf nicht negativ sein.");
-        }
-
         int paid = Math.min(requestedAmount, chips);
         chips -= paid;
         currentBet += paid;
@@ -108,7 +98,7 @@ public final class Player {
     }
 
     public synchronized boolean send(GameStateDTO state) {
-        if (senderClosed || out == null) {
+        if (senderClosed) {
             return false;
         }
 

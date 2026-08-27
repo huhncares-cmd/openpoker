@@ -150,7 +150,7 @@ public final class PokerTablePanel extends JPanel {
         boolean isActive = player.active();
         boolean isWinner = player.lastAction() != null
                 && (player.lastAction().contains("🏆") || player.lastAction().contains("GEWINNT"));
-        String name = player.name() == null ? "Spieler" : player.name();
+        String name = player.name();
 
         drawPlayerCards(g2, x, y, avatarRadius, player, isWinner);
         drawWinnerCrown(g2, x, y, avatarRadius, player, isWinner);
@@ -226,7 +226,7 @@ public final class PokerTablePanel extends JPanel {
         g2.setStroke(new BasicStroke(isWinner ? 2.5f : 1.5f));
         g2.drawOval(x - avatarRadius, y - avatarRadius, avatarRadius * 2, avatarRadius * 2);
 
-        String initial = name.length() > 0 ? name.substring(0, Math.min(3, name.length())) : "P";
+        String initial = name.substring(0, Math.min(3, name.length()));
         g2.setColor(Color.WHITE);
         g2.setFont(new Font("SansSerif", Font.BOLD, 12));
         int strW = g2.getFontMetrics().stringWidth(initial);

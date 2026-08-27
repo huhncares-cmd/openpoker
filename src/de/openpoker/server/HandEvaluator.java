@@ -63,10 +63,6 @@ public final class HandEvaluator {
         cards.addAll(holeCards);
         cards.addAll(communityCards);
 
-        if (cards.size() < 5 || cards.size() > 7) {
-            throw new IllegalArgumentException("Für die Auswertung werden 5 bis 7 Karten benötigt.");
-        }
-
         if (cards.size() == 5) {
             return evaluateFive(cards);
         }

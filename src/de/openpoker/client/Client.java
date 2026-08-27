@@ -34,7 +34,7 @@ public final class Client {
     }
 
     public Client(String playerName, String host, int port) {
-        this.playerName = (playerName != null && !playerName.isBlank()) ? playerName.trim() : "Spieler";
+        this.playerName = playerName.trim();
         this.host = host;
         this.port = port;
     }
@@ -83,7 +83,7 @@ public final class Client {
                 }
             }
         } catch (Exception exception) {
-            disconnectMessage = "Verbindungsfehler: " + errorMessage(exception);
+            disconnectMessage = "Verbindungsfehler: " + exception.getMessage();
             if (!closed) {
                 System.err.println(disconnectMessage);
             }
@@ -111,12 +111,9 @@ public final class Client {
         } catch (IOException exception) {
             out = null;
             close();
-            String message = "Senden fehlgeschlagen: " + errorMessage(exception);
+            String message = "Senden fehlgeschlagen: " + exception.getMessage();
             System.err.println(message);
-            PokerWindow pokerWindow = window;
-            if (pokerWindow != null) {
-                onUiThread(() -> pokerWindow.setConnectionState(false, message));
-            }
+            onUiThread(() -> window.setConnectionState(false, message));
             return false;
         }
     }
@@ -127,11 +124,6 @@ public final class Client {
                 action.run();
             }
         });
-    }
-
-    private static String errorMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
     }
 
     public synchronized void close() {
@@ -177,22 +169,8 @@ public final class Client {
         }
 
         String name = nameField.getText().trim();
-        if (name.isEmpty()) {
-            name = "Spieler";
-        }
         String host = hostField.getText().trim();
-        if (host.isEmpty()) {
-            host = DEFAULT_HOST;
-        }
-        int port;
-        try {
-            port = Integer.parseInt(portField.getText().trim());
-            if (port < 1 || port > 65_535) {
-                port = DEFAULT_PORT;
-            }
-        } catch (NumberFormatException e) {
-            port = DEFAULT_PORT;
-        }
+        int port = Integer.parseInt(portField.getText().trim());
 
         return new ConnectionConfig(name, host, port);
     }
@@ -205,18 +183,10 @@ public final class Client {
         if (args.length >= 3) {
             name = args[0];
             host = args[1];
-            try {
-                port = Integer.parseInt(args[2]);
-            } catch (NumberFormatException e) {
-                port = DEFAULT_PORT;
-            }
+            port = Integer.parseInt(args[2]);
         } else if (args.length == 2) {
             host = args[0];
-            try {
-                port = Integer.parseInt(args[1]);
-            } catch (NumberFormatException e) {
-                port = DEFAULT_PORT;
-            }
+            port = Integer.parseInt(args[1]);
         } else if (args.length == 1) {
             host = args[0];
         } else {
