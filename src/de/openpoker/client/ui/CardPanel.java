@@ -10,7 +10,6 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import javax.swing.JPanel;
 import de.openpoker.common.model.Card;
-import de.openpoker.common.model.Rank;
 import de.openpoker.common.model.Suit;
 
 public final class CardPanel extends JPanel {
@@ -88,10 +87,9 @@ public final class CardPanel extends JPanel {
         // 4. Farben & Symbole
         boolean isRed = card.suit() == Suit.HEARTS || card.suit() == Suit.DIAMONDS;
         Color primaryColor = isRed ? new Color(215, 35, 35) : new Color(28, 30, 38);
-        Color secondaryColor = isRed ? new Color(255, 230, 230) : new Color(230, 235, 245);
 
-        String suitSymbol = getSuitSymbol(card.suit());
-        String rankStr = getRankString(card.rank());
+        String suitSymbol = card.suit().getSymbol();
+        String rankStr = card.rank().getSymbol();
 
         // 5. Dekorativer Hintergrund-Wasserzeichen-Suit in der Kartenmitte
         g2.setFont(new Font("SansSerif", Font.BOLD, 38));
@@ -117,32 +115,4 @@ public final class CardPanel extends JPanel {
         g2.drawString(rankStr, x + w - rankW - 7, y + h - 6);
     }
 
-    private static String getSuitSymbol(Suit suit) {
-        if (suit == null) return "?";
-        return switch (suit) {
-            case CLUBS -> "♣";
-            case DIAMONDS -> "♦";
-            case HEARTS -> "♥";
-            case SPADES -> "♠";
-        };
-    }
-
-    private static String getRankString(Rank rank) {
-        if (rank == null) return "?";
-        return switch (rank) {
-            case TWO -> "2";
-            case THREE -> "3";
-            case FOUR -> "4";
-            case FIVE -> "5";
-            case SIX -> "6";
-            case SEVEN -> "7";
-            case EIGHT -> "8";
-            case NINE -> "9";
-            case TEN -> "10";
-            case JACK -> "J";
-            case QUEEN -> "Q";
-            case KING -> "K";
-            case ACE -> "A";
-        };
-    }
 }

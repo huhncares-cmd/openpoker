@@ -15,7 +15,7 @@ import de.openpoker.client.ui.PokerWindow;
 import de.openpoker.common.network.GameStateDTO;
 import de.openpoker.common.network.PlayerAction;
 
-public final class Client implements AutoCloseable {
+public final class Client {
     private static final String DEFAULT_HOST = "localhost";
     private static final int DEFAULT_PORT = 8888;
     private static final int CONNECT_TIMEOUT_MS = 5_000;
@@ -34,7 +34,7 @@ public final class Client implements AutoCloseable {
     }
 
     public Client(String playerName, String host, int port) {
-        this.playerName = (playerName != null && !playerName.isBlank()) ? playerName.trim() : "Spieler";
+        this.playerName = playerName.trim();
         this.host = host;
         this.port = port;
     }
@@ -44,8 +44,8 @@ public final class Client implements AutoCloseable {
             PokerWindow pokerWindow = new PokerWindow();
             window = pokerWindow;
             pokerWindow.setTitle("OpenPoker Client - " + playerName);
-            pokerWindow.setActionListener(this::sendActionToServer);
-            pokerWindow.setCloseHandler(this::close);
+            pokerWindow.setActionListener(action -> sendActionToServer(action));
+            pokerWindow.setCloseHandler(() -> close());
             pokerWindow.setConnectionState(false, "Verbinde mit " + host + ":" + port + "...");
             pokerWindow.setVisible(true);
 
@@ -75,14 +75,15 @@ public final class Client implements AutoCloseable {
 
                     while (!closed) {
                         Object message = input.readObject();
-                        if (message instanceof GameStateDTO state) {
+                        if (message instanceof GameStateDTO) {
+                            GameStateDTO state = (GameStateDTO) message;
                             onUiThread(() -> pokerWindow.updateGameState(state));
                         }
                     }
                 }
             }
         } catch (Exception exception) {
-            disconnectMessage = "Verbindungsfehler: " + errorMessage(exception);
+            disconnectMessage = "Verbindungsfehler: " + exception.getMessage();
             if (!closed) {
                 System.err.println(disconnectMessage);
             }
@@ -110,12 +111,9 @@ public final class Client implements AutoCloseable {
         } catch (IOException exception) {
             out = null;
             close();
-            String message = "Senden fehlgeschlagen: " + errorMessage(exception);
+            String message = "Senden fehlgeschlagen: " + exception.getMessage();
             System.err.println(message);
-            PokerWindow pokerWindow = window;
-            if (pokerWindow != null) {
-                onUiThread(() -> pokerWindow.setConnectionState(false, message));
-            }
+            onUiThread(() -> window.setConnectionState(false, message));
             return false;
         }
     }
@@ -128,12 +126,6 @@ public final class Client implements AutoCloseable {
         });
     }
 
-    private static String errorMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
-    }
-
-    @Override
     public synchronized void close() {
         if (!closed) {
             closed = true;
@@ -177,22 +169,8 @@ public final class Client implements AutoCloseable {
         }
 
         String name = nameField.getText().trim();
-        if (name.isEmpty()) {
-            name = "Spieler";
-        }
         String host = hostField.getText().trim();
-        if (host.isEmpty()) {
-            host = DEFAULT_HOST;
-        }
-        int port;
-        try {
-            port = Integer.parseInt(portField.getText().trim());
-            if (port < 1 || port > 65_535) {
-                port = DEFAULT_PORT;
-            }
-        } catch (NumberFormatException e) {
-            port = DEFAULT_PORT;
-        }
+        int port = Integer.parseInt(portField.getText().trim());
 
         return new ConnectionConfig(name, host, port);
     }
@@ -205,18 +183,10 @@ public final class Client implements AutoCloseable {
         if (args.length >= 3) {
             name = args[0];
             host = args[1];
-            try {
-                port = Integer.parseInt(args[2]);
-            } catch (NumberFormatException e) {
-                port = DEFAULT_PORT;
-            }
+            port = Integer.parseInt(args[2]);
         } else if (args.length == 2) {
             host = args[0];
-            try {
-                port = Integer.parseInt(args[1]);
-            } catch (NumberFormatException e) {
-                port = DEFAULT_PORT;
-            }
+            port = Integer.parseInt(args[1]);
         } else if (args.length == 1) {
             host = args[0];
         } else {

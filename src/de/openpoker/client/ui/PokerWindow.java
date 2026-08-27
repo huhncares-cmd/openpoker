@@ -16,10 +16,6 @@ import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.function.LongFunction;
-import java.util.function.Predicate;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -30,6 +26,7 @@ import javax.swing.JTextField;
 import javax.swing.border.EmptyBorder;
 import de.openpoker.common.model.Card;
 import de.openpoker.common.model.GamePhase;
+import de.openpoker.common.network.ActionType;
 import de.openpoker.common.network.GameStateDTO;
 import de.openpoker.common.network.PlayerAction;
 import de.openpoker.common.network.PlayerStateDTO;
@@ -52,7 +49,11 @@ public final class PokerWindow extends JFrame {
     private final JButton nextRoundBtn = new ModernButton("NÄCHSTE RUNDE ➔", new Color(135, 55, 195), new Color(95, 30, 150));
     private final JButton sendBtn = new ModernButton("Senden", new Color(55, 65, 85), new Color(40, 48, 65));
 
-    private transient Predicate<PlayerAction> actionListener;
+    public interface PokerActionListener {
+        boolean sendAction(PlayerAction action);
+    }
+
+    private PokerActionListener actionListener;
     private GameStateDTO gameState;
     private boolean connected;
     private boolean turnActionPending;
@@ -145,24 +146,24 @@ public final class PokerWindow extends JFrame {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 8));
         buttonPanel.setOpaque(false);
 
-        foldBtn.addActionListener(e -> sendTurnAction(PlayerAction.Fold::new));
-        checkBtn.addActionListener(e -> sendTurnAction(PlayerAction.Check::new));
-        callBtn.addActionListener(e -> sendTurnAction(PlayerAction.Call::new));
-        raise50Btn.addActionListener(e -> sendTurnAction(turnId -> new PlayerAction.Raise(turnId, 50)));
-        raise100Btn.addActionListener(e -> sendTurnAction(turnId -> new PlayerAction.Raise(turnId, 100)));
+        foldBtn.addActionListener(e -> sendTurnAction(ActionType.FOLD));
+        checkBtn.addActionListener(e -> sendTurnAction(ActionType.CHECK));
+        callBtn.addActionListener(e -> sendTurnAction(ActionType.CALL));
+        raise50Btn.addActionListener(e -> sendTurnAction(ActionType.RAISE, 50));
+        raise100Btn.addActionListener(e -> sendTurnAction(ActionType.RAISE, 100));
         allInBtn.addActionListener(e -> {
-            PlayerStateDTO me = gameState == null ? null : findMe(gameState).orElse(null);
+            PlayerStateDTO me = gameState == null ? null : findMe(gameState);
             if (me != null) {
                 int toCall = Math.max(0, gameState.currentBet() - me.currentBet());
                 int allInRaise = me.chips() - toCall;
                 if (allInRaise > 0) {
-                    sendTurnAction(turnId -> new PlayerAction.Raise(turnId, allInRaise));
+                    sendTurnAction(ActionType.RAISE, allInRaise);
                 } else {
-                    sendTurnAction(PlayerAction.Call::new);
+                    sendTurnAction(ActionType.CALL);
                 }
             }
         });
-        nextRoundBtn.addActionListener(e -> sendAction(new PlayerAction.NextRound()));
+        nextRoundBtn.addActionListener(e -> sendAction(new PlayerAction(ActionType.NEXT_ROUND)));
 
         buttonPanel.add(foldBtn);
         buttonPanel.add(checkBtn);
@@ -177,12 +178,12 @@ public final class PokerWindow extends JFrame {
 
     private void sendChat() {
         String text = chatInput.getText().trim();
-        if (!text.isEmpty() && sendAction(new PlayerAction.Chat(text))) {
+        if (!text.isEmpty() && sendAction(new PlayerAction(ActionType.CHAT, text))) {
             chatInput.setText("");
         }
     }
 
-    public void setActionListener(Predicate<PlayerAction> listener) {
+    public void setActionListener(PokerActionListener listener) {
         actionListener = listener;
     }
 
@@ -196,14 +197,19 @@ public final class PokerWindow extends JFrame {
     }
 
     private boolean sendAction(PlayerAction action) {
-        return connected && actionListener != null && actionListener.test(action);
+        return connected && actionListener.sendAction(action);
     }
 
-    private void sendTurnAction(LongFunction<PlayerAction> actionFactory) {
-        if (!connected || actionListener == null || gameState == null || turnActionPending) {
+    private void sendTurnAction(ActionType type) {
+        sendTurnAction(type, 0);
+    }
+
+    private void sendTurnAction(ActionType type, int amount) {
+        if (!connected || gameState == null || turnActionPending) {
             return;
         }
-        if (sendAction(actionFactory.apply(gameState.turnId()))) {
+        PlayerAction action = new PlayerAction(type, gameState.turnId(), amount);
+        if (sendAction(action)) {
             turnActionPending = true;
             refreshControls();
         }
@@ -219,10 +225,10 @@ public final class PokerWindow extends JFrame {
         refreshControls();
 
         if (!connected) {
-            turnStatusLabel.setText(message == null || message.isBlank() ? "Verbindung getrennt" : message);
+            turnStatusLabel.setText(message.isBlank() ? "Verbindung getrennt" : message);
             turnStatusLabel.setForeground(new Color(240, 90, 90));
         } else if (gameState == null) {
-            turnStatusLabel.setText(message == null || message.isBlank() ? "Verbunden, warte auf Spielstand..." : message);
+            turnStatusLabel.setText(message.isBlank() ? "Verbunden, warte auf Spielstand..." : message);
             turnStatusLabel.setForeground(new Color(100, 180, 255));
         } else {
             updateStatus(gameState);
@@ -230,13 +236,13 @@ public final class PokerWindow extends JFrame {
     }
 
     public void updateGameState(GameStateDTO state) {
-        gameState = Objects.requireNonNull(state);
+        gameState = state;
         turnActionPending = false;
-        List<PlayerStateDTO> players = state.players() == null ? List.of() : state.players();
+        List<PlayerStateDTO> players = state.players();
         tablePanel.updateTable(state.pot(), state.communityCards(), players);
 
         myCardsPanel.removeAll();
-        if (state.myCards() != null && !state.myCards().isEmpty()) {
+        if (!state.myCards().isEmpty()) {
             for (Card card : state.myCards()) {
                 CardPanel cardPanel = new CardPanel();
                 cardPanel.setCard(card);
@@ -251,12 +257,13 @@ public final class PokerWindow extends JFrame {
             }
         }
 
-        if (state.chatHistory() != null) {
-            chatArea.setText(String.join("\n", state.chatHistory()));
-            chatArea.setCaretPosition(chatArea.getDocument().getLength());
-        }
+        chatArea.setText(String.join("\n", state.chatHistory()));
+        chatArea.setCaretPosition(chatArea.getDocument().getLength());
 
-        findMe(state).ifPresent(me -> setTitle("OpenPoker - " + me.name()));
+        PlayerStateDTO me = findMe(state);
+        if (me != null) {
+            setTitle("OpenPoker - " + me.name());
+        }
         refreshControls();
         if (connected) {
             updateStatus(state);
@@ -266,7 +273,7 @@ public final class PokerWindow extends JFrame {
     }
 
     private void refreshControls() {
-        PlayerStateDTO me = gameState == null ? null : findMe(gameState).orElse(null);
+        PlayerStateDTO me = gameState == null ? null : findMe(gameState);
         GamePhase phase = gameState == null ? null : gameState.phase();
         boolean myTurn = connected && !turnActionPending && phase != null && phase.isBettingPhase()
             && me != null && me.active() && !me.folded();
@@ -276,7 +283,7 @@ public final class PokerWindow extends JFrame {
         foldBtn.setEnabled(myTurn);
         checkBtn.setEnabled(myTurn && toCall == 0);
         callBtn.setEnabled(myTurn && toCall > 0 && me.chips() > 0);
-        callBtn.setText(toCall > 0 && me != null ? "CALL " + Math.min(toCall, me.chips()) : "CALL");
+        callBtn.setText(toCall > 0 ? "CALL " + Math.min(toCall, me.chips()) : "CALL");
 
         raise50Btn.setEnabled(myTurn && maxRaise >= 50);
         raise100Btn.setEnabled(myTurn && maxRaise >= 100);
@@ -293,16 +300,22 @@ public final class PokerWindow extends JFrame {
     }
 
     private void updateStatus(GameStateDTO state) {
-        List<PlayerStateDTO> players = state.players() == null ? List.of() : state.players();
-        PlayerStateDTO me = findMe(state).orElse(null);
-        PlayerStateDTO active = players.stream().filter(PlayerStateDTO::active).findFirst().orElse(null);
+        List<PlayerStateDTO> players = state.players();
+        PlayerStateDTO me = findMe(state);
+        PlayerStateDTO active = null;
+        for (PlayerStateDTO player : players) {
+            if (player.active()) {
+                active = player;
+                break;
+            }
+        }
         String message = state.statusMessage();
 
         if (state.phase() == GamePhase.WAITING_FOR_PLAYERS) {
-            turnStatusLabel.setText(message == null || message.isBlank() ? "Warte auf spielbereite Spieler..." : message);
+            turnStatusLabel.setText(message.isBlank() ? "Warte auf spielbereite Spieler..." : message);
             turnStatusLabel.setForeground(new Color(255, 175, 0));
         } else if (state.phase() == GamePhase.SHOWDOWN) {
-            turnStatusLabel.setText("🏆 " + (message == null || message.isBlank() ? "Rundenende – Showdown" : message));
+            turnStatusLabel.setText("🏆 " + (message.isBlank() ? "Rundenende – Showdown" : message));
             turnStatusLabel.setForeground(new Color(255, 215, 0));
         } else if (me != null && me.active()) {
             turnStatusLabel.setText("🎯 DU BIST AM ZUG (" + me.name() + ")");
@@ -314,18 +327,18 @@ public final class PokerWindow extends JFrame {
             turnStatusLabel.setText("⏳ Warte auf 2. Spieler... (" + players.size() + "/2)");
             turnStatusLabel.setForeground(new Color(255, 175, 0));
         } else {
-            turnStatusLabel.setText(message == null || message.isBlank() ? "Spiel läuft..." : message);
+            turnStatusLabel.setText(message.isBlank() ? "Spiel läuft..." : message);
             turnStatusLabel.setForeground(new Color(100, 180, 255));
         }
     }
 
-    private Optional<PlayerStateDTO> findMe(GameStateDTO state) {
-        if (state.players() == null) {
-            return Optional.empty();
+    private PlayerStateDTO findMe(GameStateDTO state) {
+        for (PlayerStateDTO player : state.players()) {
+            if (player.id().equals(state.myPlayerId())) {
+                return player;
+            }
         }
-        return state.players().stream()
-            .filter(player -> Objects.equals(player.id(), state.myPlayerId()))
-            .findFirst();
+        return null;
     }
 
     private static final class ModernButton extends JButton {

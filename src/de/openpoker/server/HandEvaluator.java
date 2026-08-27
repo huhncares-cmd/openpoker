@@ -1,11 +1,7 @@
 package de.openpoker.server;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import de.openpoker.common.model.Card;
 import de.openpoker.common.model.Suit;
 
@@ -45,65 +41,47 @@ public final class HandEvaluator {
 
     public record HandResult(HandRank rank, List<Integer> tieBreakers, String description)
             implements Comparable<HandResult> {
-
-        public HandResult {
-            Objects.requireNonNull(rank, "rank");
-            tieBreakers = List.copyOf(tieBreakers);
-            Objects.requireNonNull(description, "description");
-        }
-
         @Override
         public int compareTo(HandResult other) {
-            Objects.requireNonNull(other, "other");
-
             int comparison = Integer.compare(rank.getValue(), other.rank.getValue());
             if (comparison != 0) {
                 return comparison;
             }
 
-            int sharedLength = Math.min(tieBreakers.size(), other.tieBreakers.size());
-            for (int i = 0; i < sharedLength; i++) {
+            for (int i = 0; i < tieBreakers.size(); i++) {
                 comparison = Integer.compare(tieBreakers.get(i), other.tieBreakers.get(i));
                 if (comparison != 0) {
                     return comparison;
                 }
             }
-            return Integer.compare(tieBreakers.size(), other.tieBreakers.size());
+            return 0;
         }
     }
 
     public static HandResult evaluateHand(List<Card> holeCards, List<Card> communityCards) {
         List<Card> cards = new ArrayList<>();
-        if (holeCards != null) {
-            cards.addAll(holeCards);
-        }
-        if (communityCards != null) {
-            cards.addAll(communityCards);
-        }
+        cards.addAll(holeCards);
+        cards.addAll(communityCards);
 
-        if (cards.size() < 5) {
-            List<Integer> highCards = new ArrayList<>();
-            for (Card card : cards) {
-                highCards.add(card.rank().getValue());
-            }
-            highCards.sort(Collections.reverseOrder());
-            return new HandResult(HandRank.HIGH_CARD, highCards, "Unvollständig");
+        if (cards.size() == 5) {
+            return evaluateFive(cards);
         }
 
         HandResult best = null;
-        int cardCount = cards.size();
-        for (int first = 0; first < cardCount - 4; first++) {
-            for (int second = first + 1; second < cardCount - 3; second++) {
-                for (int third = second + 1; third < cardCount - 2; third++) {
-                    for (int fourth = third + 1; fourth < cardCount - 1; fourth++) {
-                        for (int fifth = fourth + 1; fifth < cardCount; fifth++) {
-                            HandResult result = evaluateFive(List.of(
-                                    cards.get(first), cards.get(second), cards.get(third),
-                                    cards.get(fourth), cards.get(fifth)));
-                            if (best == null || result.compareTo(best) > 0) {
-                                best = result;
-                            }
-                        }
+        if (cards.size() == 6) {
+            for (int skip = 0; skip < cards.size(); skip++) {
+                HandResult result = evaluateWithout(cards, skip, -1);
+                if (best == null || result.compareTo(best) > 0) {
+                    best = result;
+                }
+            }
+        } else {
+            // Bei 7 Karten werden jeweils 2 weggelassen: 7 über 2 = 21 Möglichkeiten.
+            for (int skipOne = 0; skipOne < cards.size(); skipOne++) {
+                for (int skipTwo = skipOne + 1; skipTwo < cards.size(); skipTwo++) {
+                    HandResult result = evaluateWithout(cards, skipOne, skipTwo);
+                    if (best == null || result.compareTo(best) > 0) {
+                        best = result;
                     }
                 }
             }
@@ -111,25 +89,42 @@ public final class HandEvaluator {
         return best;
     }
 
+    private static HandResult evaluateWithout(List<Card> cards, int skipOne, int skipTwo) {
+        List<Card> fiveCards = new ArrayList<>();
+        for (int index = 0; index < cards.size(); index++) {
+            if (index != skipOne && index != skipTwo) {
+                fiveCards.add(cards.get(index));
+            }
+        }
+        return evaluateFive(fiveCards);
+    }
+
     private static HandResult evaluateFive(List<Card> cards) {
-        Map<Integer, Integer> rankCounts = new HashMap<>();
+        int[] rankCounts = new int[15];
         List<Integer> ranksDescending = new ArrayList<>();
         for (Card card : cards) {
-            int val = card.rank().getValue();
-            ranksDescending.add(val);
-            rankCounts.put(val, rankCounts.getOrDefault(val, 0) + 1);
+            int value = card.rank().getValue();
+            rankCounts[value]++;
         }
-        ranksDescending.sort(Collections.reverseOrder());
 
-        // Sortiere Gruppen: erst nach Häufigkeit (z.B. Drilling vor Paar), dann nach Kartenwert absteigend
-        List<Map.Entry<Integer, Integer>> groups = new ArrayList<>(rankCounts.entrySet());
-        groups.sort((a, b) -> {
-            int countCompare = Integer.compare(b.getValue(), a.getValue());
-            if (countCompare != 0) {
-                return countCompare;
+        List<Integer> fourOfAKind = new ArrayList<>();
+        List<Integer> threeOfAKind = new ArrayList<>();
+        List<Integer> pairs = new ArrayList<>();
+        List<Integer> singleCards = new ArrayList<>();
+        for (int value = 14; value >= 2; value--) {
+            for (int count = 0; count < rankCounts[value]; count++) {
+                ranksDescending.add(value);
             }
-            return Integer.compare(b.getKey(), a.getKey());
-        });
+            if (rankCounts[value] == 4) {
+                fourOfAKind.add(value);
+            } else if (rankCounts[value] == 3) {
+                threeOfAKind.add(value);
+            } else if (rankCounts[value] == 2) {
+                pairs.add(value);
+            } else if (rankCounts[value] == 1) {
+                singleCards.add(value);
+            }
+        }
 
         // Flush prüfen: Haben alle 5 Karten dieselbe Farbe?
         boolean flush = true;
@@ -141,7 +136,13 @@ public final class HandEvaluator {
             }
         }
 
-        int straightHigh = straightHigh(new ArrayList<>(rankCounts.keySet()));
+        List<Integer> ranksAscending = new ArrayList<>();
+        for (int value = 2; value <= 14; value++) {
+            if (rankCounts[value] > 0) {
+                ranksAscending.add(value);
+            }
+        }
+        int straightHigh = straightHigh(ranksAscending);
 
         if (flush && straightHigh == 14) {
             return result(HandRank.ROYAL_FLUSH, List.of(14));
@@ -149,13 +150,13 @@ public final class HandEvaluator {
         if (flush && straightHigh > 0) {
             return result(HandRank.STRAIGHT_FLUSH, List.of(straightHigh));
         }
-        if (groups.get(0).getValue() == 4) {
+        if (!fourOfAKind.isEmpty()) {
             return result(HandRank.FOUR_OF_A_KIND,
-                    List.of(groups.get(0).getKey(), groups.get(1).getKey()));
+                    List.of(fourOfAKind.get(0), singleCards.get(0)));
         }
-        if (groups.get(0).getValue() == 3 && groups.get(1).getValue() == 2) {
+        if (!threeOfAKind.isEmpty() && !pairs.isEmpty()) {
             return result(HandRank.FULL_HOUSE,
-                    List.of(groups.get(0).getKey(), groups.get(1).getKey()));
+                    List.of(threeOfAKind.get(0), pairs.get(0)));
         }
         if (flush) {
             return result(HandRank.FLUSH, ranksDescending);
@@ -163,14 +164,21 @@ public final class HandEvaluator {
         if (straightHigh > 0) {
             return result(HandRank.STRAIGHT, List.of(straightHigh));
         }
-        if (groups.get(0).getValue() == 3) {
-            return result(HandRank.THREE_OF_A_KIND, groupRanks(groups));
+        if (!threeOfAKind.isEmpty()) {
+            List<Integer> tieBreakers = new ArrayList<>();
+            tieBreakers.add(threeOfAKind.get(0));
+            tieBreakers.addAll(singleCards);
+            return result(HandRank.THREE_OF_A_KIND, tieBreakers);
         }
-        if (groups.get(0).getValue() == 2 && groups.get(1).getValue() == 2) {
-            return result(HandRank.TWO_PAIR, groupRanks(groups));
+        if (pairs.size() >= 2) {
+            return result(HandRank.TWO_PAIR,
+                    List.of(pairs.get(0), pairs.get(1), singleCards.get(0)));
         }
-        if (groups.get(0).getValue() == 2) {
-            return result(HandRank.ONE_PAIR, groupRanks(groups));
+        if (pairs.size() == 1) {
+            List<Integer> tieBreakers = new ArrayList<>();
+            tieBreakers.add(pairs.get(0));
+            tieBreakers.addAll(singleCards);
+            return result(HandRank.ONE_PAIR, tieBreakers);
         }
         return result(HandRank.HIGH_CARD, ranksDescending);
     }
@@ -180,27 +188,16 @@ public final class HandEvaluator {
             return 0;
         }
 
-        List<Integer> sorted = new ArrayList<>(ranks);
-        Collections.sort(sorted);
-
         // Sonderfall: Wheel-Straße (Ass als 1: A-2-3-4-5)
-        if (sorted.equals(List.of(2, 3, 4, 5, 14))) {
+        if (ranks.equals(List.of(2, 3, 4, 5, 14))) {
             return 5;
         }
-        for (int i = 1; i < sorted.size(); i++) {
-            if (sorted.get(i) != sorted.get(0) + i) {
+        for (int i = 1; i < ranks.size(); i++) {
+            if (ranks.get(i) != ranks.get(0) + i) {
                 return 0;
             }
         }
-        return sorted.get(sorted.size() - 1);
-    }
-
-    private static List<Integer> groupRanks(List<Map.Entry<Integer, Integer>> groups) {
-        List<Integer> result = new ArrayList<>();
-        for (Map.Entry<Integer, Integer> entry : groups) {
-            result.add(entry.getKey());
-        }
-        return result;
+        return ranks.get(ranks.size() - 1);
     }
 
     private static HandResult result(HandRank rank, List<Integer> tieBreakers) {

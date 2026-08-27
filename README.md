@@ -17,7 +17,8 @@ src/de/openpoker/
 │   │   ├── Rank.java        # Enum für Kartenwerte (Two bis Ace)
 │   │   └── GamePhase.java   # Enum der Spielphasen (Preflop, Flop, Turn, River, Showdown)
 │   └── network/
-│       ├── PlayerAction.java   # Sealed Interface aller Client-Aktionen (Fold, Call, Raise, Chat, ...)
+│       ├── ActionType.java     # Enum aller Aktionen (Fold, Call, Raise, Chat, ...)
+│       ├── PlayerAction.java   # Übertragene Aktion mit Typ und benötigten Werten
 │       ├── PlayerStateDTO.java # Öffentliche Daten eines Spielers am Tisch (Chips, Einsatz, Status)
 │       └── GameStateDTO.java   # Kompletter Spielzustand für die GUI-Aktualisierung
 │
@@ -46,7 +47,7 @@ Die Netzwerkkommunikation basiert auf **TCP-Sockets** und Java-Objektserialisier
 ```
        [ Client A ]                  [ Server ]                  [ Client B ]
             │                            │                            │
-            │── 1. PlayerAction.Raise ──>│                            │
+            │── 1. PlayerAction (RAISE) ─>│                            │
             │   (z. B. Erhöhung +50)     │                            │
             │                            │── 2. GameController prüft  │
             │                            │      und aktualisiert      │
@@ -62,6 +63,8 @@ Die Netzwerkkommunikation basiert auf **TCP-Sockets** und Java-Objektserialisier
 2. **Aktion senden**: Klickt ein Spieler einen Button (z. B. *Call* oder *Raise*), sendet der Client ein `PlayerAction`-Objekt an den Server.
 3. **Zustandsaktualisierung (State Machine)**: Der `GameController` verarbeitet die Aktion synchronisiert (`synchronized`), berechnet Einsätze und Phasenübergänge und verteilt das neue `GameStateDTO` an alle Clients.
 4. **GUI-Update**: Jeder Client empfängt das DTO im Hintergrund-Thread und stößt via `SwingUtilities.invokeLater()` die Neuzeichnung des Fensters an.
+
+`PlayerAction` ist eine normale Datenklasse. Das Enum `ActionType` legt fest, ob es sich zum Beispiel um `FOLD`, `CALL` oder `RAISE` handelt. Je nach Typ werden zusätzlich die Zugnummer, der Raise-Betrag oder eine Chat-Nachricht verwendet.
 
 ### Schutz vor Cheaten (Information Hiding):
 * Während der laufenden Hand (Preflop bis River) enthält das `PlayerStateDTO` für fremde Spieler als Handkarten **`null`**.
@@ -95,11 +98,12 @@ Der `HandEvaluator` ermittelt beim Showdown für jeden Spieler den exakten Poker
 
 1. **Kombinatorik**:
    * Ein Spieler hat 2 private Handkarten und bis zu 5 Tischkarten (insgesamt 7 Karten).
-   * Aus diesen 7 Karten werden alle möglichen 5-Karten-Teilmengen gebildet:
+   * Mit zwei Schleifen werden jeweils 2 Karten weggelassen. Die übrigen 5 Karten bilden eine mögliche Pokerhand.
+   * Dadurch entstehen alle möglichen 5-Karten-Teilmengen:
      $$\binom{7}{5} = \frac{7!}{5! \cdot 2!} = 21 \text{ Kombinationen}$$
 2. **Klassifizierung jeder 5er-Kombination**:
    * Prüft auf Flush (gleiche Farbe) und Straße (`straightHigh`).
-   * Zählt gleiche Kartenwerte (Paare, Drillinge, Vierlinge, Full House).
+   * Zählt gleiche Kartenwerte mit einem einfachen Array (`rankCounts`) und erkennt damit Paare, Drillinge, Vierlinge und Full House.
    * Berücksichtigt Spezialregeln wie die **Wheel-Straße** (Ass als 1 bei `A-2-3-4-5`).
 3. **Vergleich & Tie-Breaker**:
    * `HandResult` implementiert `Comparable<HandResult>`.
@@ -125,7 +129,7 @@ Das Projekt wurde modular in vier gleichwertige Kernbereiche aufgeteilt:
 
 | Teammitglied | Schwerpunktbereich | Zuständige Klassen | Hauptthemen in der Präsentation |
 | :--- | :--- | :--- | :--- |
-| **Konrad** | **Netzwerk-Stack & Datenfluss** | `Server.java`, `Client.java`, `PlayerAction.java`, `GameStateDTO.java` | TCP-Sockets, Multithreading (`poker-client-handler`, `poker-reader`), Objekt-Serialisierung, Information Hiding (Cheating-Schutz). |
+| **Konrad** | **Netzwerk-Stack & Datenfluss** | `Server.java`, `Client.java`, `ActionType.java`, `PlayerAction.java`, `GameStateDTO.java` | TCP-Sockets, Multithreading (`poker-client-handler`, `poker-reader`), Objekt-Serialisierung, Information Hiding (Cheating-Schutz). |
 | **Leon** | **Spiellogik & State Machine** | `GameController.java`, `GamePhase.java`, `Deck.java`, `GameTable.java` | Zustandsautomat (Preflop bis Showdown), Pflichteinsätze (SB 10 / BB 20), rotierender Dealer-Button, Thread-Sicherheit via `synchronized` und `turnId`. |
 | **Raphael** | **Poker-Mathematik & Algorithmen** | `HandEvaluator.java`, `calculatePayouts()` in `GameController.java` | Hand-Kombinatorik ($\binom{7}{5} = 21$), Ranking-Logik & Wheel-Straße, Tie-Breaker/Kicker-Vergleich (`Comparable<HandResult>`), mathematische Side-Pot-Aufteilung bei All-Ins. |
 | **Alex** | **GUI, Custom Painting & UX** | `PokerWindow.java`, `PokerTablePanel.java`, `CardPanel.java` | 2D-Rendering mit `Graphics2D` (Casino-Filz, Mahagoni-Reling, plastische Karten), trigonometrische Spieler-Verteilung (`sin`/`cos`), responsive Steuerung & `ModernButton`. |

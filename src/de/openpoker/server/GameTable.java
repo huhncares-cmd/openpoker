@@ -22,16 +22,10 @@ public final class GameTable {
     }
 
     public void setPot(int pot) {
-        if (pot < 0) {
-            throw new IllegalArgumentException("Der Pot darf nicht negativ sein.");
-        }
         this.pot = pot;
     }
 
     public void addPot(int amount) {
-        if (amount < 0) {
-            throw new IllegalArgumentException("Der Einsatz darf nicht negativ sein.");
-        }
         pot += amount;
     }
 
@@ -42,8 +36,6 @@ public final class GameTable {
     }
 
     public void dealCommunityCard() {
-        if (deck.remainingCards() > 0) {
-            communityCards.add(deck.drawCard());
-        }
+        communityCards.add(deck.drawCard());
     }
 }

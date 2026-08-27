@@ -1,5 +1,6 @@
 package de.openpoker.server;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -11,7 +12,6 @@ public final class Server {
     private static final int DEFAULT_PORT = 8888;
     private final int port;
     private final GameController gameController = new GameController();
-    private int playerCounter = 1;
 
     public Server(int port) {
         this.port = port;
@@ -29,41 +29,25 @@ public final class Server {
     }
 
     private void handleClient(Socket socket) {
-        String defaultName;
-        synchronized (this) {
-            defaultName = "Spieler " + playerCounter++;
-        }
-        String playerName = defaultName;
+        String playerName = "Spieler";
         Player player = null;
 
-        try (socket;
-             ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
-             ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
+        try (Socket clientSocket = socket;
+             ObjectOutputStream out = new ObjectOutputStream(clientSocket.getOutputStream());
+             ObjectInputStream in = new ObjectInputStream(clientSocket.getInputStream())) {
             out.flush();
 
-            Object initial = in.readObject();
-            if (initial instanceof String customName && !customName.isBlank()) {
-                playerName = customName.trim();
-                if (playerName.length() > 20) {
-                    playerName = playerName.substring(0, 20);
-                }
-                player = gameController.addPlayer(playerName, out);
-            } else if (initial instanceof PlayerAction action) {
-                player = gameController.addPlayer(playerName, out);
-                gameController.handleAction(player, action);
-            } else {
-                player = gameController.addPlayer(playerName, out);
-            }
+            playerName = ((String) in.readObject()).trim();
+            player = gameController.addPlayer(playerName, out);
 
-            while (!socket.isClosed()) {
-                Object message = in.readObject();
-                if (message instanceof PlayerAction action) {
-                    gameController.handleAction(player, action);
-                }
+            while (!clientSocket.isClosed()) {
+                PlayerAction action = (PlayerAction) in.readObject();
+                gameController.handleAction(player, action);
             }
-        } catch (Exception e) {
-            String reason = (e instanceof java.io.EOFException) ? "Verbindung beendet" : (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
-            System.out.println(playerName + " getrennt (" + reason + ").");
+        } catch (EOFException exception) {
+            System.out.println(playerName + " getrennt (Verbindung beendet).");
+        } catch (Exception exception) {
+            System.out.println(playerName + " getrennt (" + exception.getMessage() + ").");
         } finally {
             if (player != null) {
                 gameController.removePlayer(player);
@@ -71,25 +55,7 @@ public final class Server {
         }
     }
 
-    public static void main(String[] args) {
-        int port = DEFAULT_PORT;
-        if (args.length > 0) {
-            try {
-                port = Integer.parseInt(args[0]);
-                if (port < 1 || port > 65_535) {
-                    throw new NumberFormatException();
-                }
-            } catch (NumberFormatException exception) {
-                System.err.println("Ungültiger Port: " + args[0]);
-                System.exit(2);
-            }
-        }
-
-        try {
-            new Server(port).start();
-        } catch (IOException exception) {
-            System.err.println("Server-Fehler: " + exception.getMessage());
-            System.exit(1);
-        }
+    public static void main(String[] args) throws IOException {
+        new Server(DEFAULT_PORT).start();
     }
 }
