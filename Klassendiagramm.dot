@@ -14,7 +14,7 @@ digraph OpenPoker {
     TablePanel [label="PokerTablePanel\n(Swing JPanel)|- players : List\l|+ updateTable(...)\l# paintComponent(g)\l"];
     CardPanel [label="CardPanel\n(Swing JPanel)|- card : Card\l|+ setCard(card)\l# paintComponent(g)\l"];
     Listener [label="«interface, inner»\nPokerActionListener|+ sendAction(action) : boolean"];
-    Button [label="«inner» ModernButton\n(Swing JButton)"];
+    Button [label="ModernButton\n(Swing JButton)"];
     Config [label="«record, inner»\nConnectionConfig|name, host, port"];
   }
   subgraph cluster_server {
@@ -37,7 +37,7 @@ digraph OpenPoker {
     Action [label="PlayerAction|type, turnId\lamount, message\l"];
     ActionType [label="«enum» ActionType|FOLD, CHECK, CALL\lRAISE, CHAT, NEXT_ROUND\l"];
     State [label="«record» GameStateDTO|pot, currentBet, phase, turnId\lcommunityCards, myCards\lmyPlayerId, players\lstatusMessage, chatHistory\l"];
-    PlayerState [label="«record» PlayerStateDTO|id, name, chips, currentBet\linHand, folded, allIn, active\llastAction, cards, isDealer\l"];
+    PlayerState [label="«record» PlayerStateDTO|id, name, chips, currentBet\linHand, folded, allIn, active\llastAction, revealedCards, isDealer\l"];
   }
   Main -> Client [style=dashed, label="startet"];
   Client -> Window [label="1"];

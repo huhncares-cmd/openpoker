@@ -21,7 +21,7 @@ import de.openpoker.common.network.PlayerStateDTO;
 
 public final class PokerTablePanel extends JPanel {
     private static final long serialVersionUID = 1L;
-    private final JLabel potLabel = new JLabel("💰 POT: 0 CHIPS", JLabel.CENTER);
+    private final JLabel potLabel = new JLabel("POT: 0 CHIPS", JLabel.CENTER);
     private final JPanel cardsContainer = new JPanel(new FlowLayout(FlowLayout.CENTER, 14, 8));
 
     private List<PlayerStateDTO> players = List.of();
@@ -44,7 +44,7 @@ public final class PokerTablePanel extends JPanel {
     }
 
     public void updateTable(int pot, List<Card> communityCards, List<PlayerStateDTO> players) {
-        potLabel.setText("💰 POT: " + String.format("%,d", pot) + " CHIPS");
+        potLabel.setText("POT: " + String.format("%,d", pot) + " CHIPS");
         this.players = players;
 
         cardsContainer.removeAll();
@@ -64,7 +64,6 @@ public final class PokerTablePanel extends JPanel {
     }
 
     @Override
-    // Mit KI-Hilfe in kleinere Zeichenmethoden aufgeteilt.
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g;
@@ -108,9 +107,9 @@ public final class PokerTablePanel extends JPanel {
             radius,
             new float[]{0.0f, 0.65f, 1.0f},
             new Color[]{
-                new Color(32, 128, 62),   // Helles Casino-Smaragdgrün
-                new Color(20, 92, 44),    // Klassisches Grün
-                new Color(10, 52, 24)     // Tiefes Samtdunkelgrün
+                new Color(32, 128, 62),   // helles casino-smaragdgrün
+                new Color(20, 92, 44),    // klassisches grün
+                new Color(10, 52, 24)     // tiefes samtdunkelgrün
             }
         );
         g2.setPaint(feltGradient);
@@ -141,7 +140,7 @@ public final class PokerTablePanel extends JPanel {
         }
     }
 
-    // KI-Hilfe bei der Berechnung der Spielerpositionen.
+    // ki-hilfe bei der berechnung der spielerpositionen
     private double calculatePlayerAngle(int playerIndex, int numPlayers) {
         if (numPlayers == 1) {
             return Math.PI / 2;
@@ -154,12 +153,10 @@ public final class PokerTablePanel extends JPanel {
     private void drawPlayerAvatar(Graphics2D g2, int x, int y, PlayerStateDTO player) {
         int avatarRadius = 24;
         boolean isActive = player.active();
-        boolean isWinner = player.lastAction() != null
-                && (player.lastAction().contains("🏆") || player.lastAction().contains("GEWINNT"));
+        boolean isWinner = player.lastAction() != null && player.lastAction().contains("GEWINNT");
         String name = player.name();
 
         drawPlayerCards(g2, x, y, avatarRadius, player, isWinner);
-        drawWinnerCrown(g2, x, y, avatarRadius, player, isWinner);
         drawAvatarCircle(g2, x, y, avatarRadius, player, name, isActive, isWinner);
         drawDealerButton(g2, x, y, avatarRadius, player);
         drawPlayerLabel(g2, x, y, avatarRadius, player, name);
@@ -170,7 +167,7 @@ public final class PokerTablePanel extends JPanel {
             Graphics2D g2, int x, int y, int avatarRadius,
             PlayerStateDTO player, boolean isWinner) {
         if (player.inHand() && !player.folded()) {
-            List<Card> cards = player.cards();
+            List<Card> cards = player.revealedCards();
             if (cards != null && !cards.isEmpty()) {
                 int cardW = 24;
                 int cardH = 34;
@@ -190,19 +187,6 @@ public final class PokerTablePanel extends JPanel {
                 drawMiniCardBack(g2, startX, cardY, cardW, cardH);
                 drawMiniCardBack(g2, startX + 12, cardY, cardW, cardH);
             }
-        }
-    }
-
-    private void drawWinnerCrown(
-            Graphics2D g2, int x, int y, int avatarRadius,
-            PlayerStateDTO player, boolean isWinner) {
-        if (isWinner) {
-            g2.setColor(new Color(255, 215, 0));
-            g2.setFont(new Font("SansSerif", Font.PLAIN, 18));
-            int crownY = (player.cards() != null && !player.cards().isEmpty())
-                    ? y - avatarRadius - 44
-                    : y - avatarRadius - 10;
-            g2.drawString("👑", x - 9, crownY);
         }
     }
 
@@ -262,7 +246,7 @@ public final class PokerTablePanel extends JPanel {
             Graphics2D g2, int x, int y, int avatarRadius,
             PlayerStateDTO player, String name) {
         g2.setFont(new Font("SansSerif", Font.BOLD, 11));
-        String playerLabel = name + " · 🪙 " + String.format("%,d", player.chips());
+        String playerLabel = name + " · " + String.format("%,d", player.chips());
         int nameW = g2.getFontMetrics().stringWidth(playerLabel) + 12;
         g2.setColor(new Color(16, 18, 24, 230));
         g2.fillRoundRect(x - nameW / 2, y + avatarRadius + 3, nameW, 18, 8, 8);
@@ -300,15 +284,15 @@ public final class PokerTablePanel extends JPanel {
     }
 
     private void drawMiniCard(Graphics2D g2, int cx, int cy, int w, int h, Card card, boolean isWinner) {
-        // Schatten
+        // schatten
         g2.setColor(new Color(0, 0, 0, 90));
         g2.fillRoundRect(cx + 1, cy + 1, w, h, 6, 6);
 
-        // Hintergrund
+        // hintergrund
         g2.setColor(Color.WHITE);
         g2.fillRoundRect(cx, cy, w, h, 6, 6);
 
-        // Goldener Rand beim Gewinner
+        // goldener rand beim gewinner
         g2.setColor(isWinner ? new Color(255, 215, 0) : new Color(180, 180, 180));
         g2.setStroke(new BasicStroke(isWinner ? 2.0f : 1.0f));
         g2.drawRoundRect(cx, cy, w, h, 6, 6);
@@ -330,11 +314,11 @@ public final class PokerTablePanel extends JPanel {
     }
 
     private void drawMiniCardBack(Graphics2D g2, int cx, int cy, int w, int h) {
-        // Schatten
+        // schatten
         g2.setColor(new Color(0, 0, 0, 80));
         g2.fillRoundRect(cx + 1, cy + 1, w, h, 5, 5);
 
-        // Blauer Kartenrücken
+        // blauer kartenrücken
         GradientPaint backGrad = new GradientPaint(
             cx, cy, new Color(30, 55, 130),
             cx + w, cy + h, new Color(18, 32, 85)
@@ -342,12 +326,12 @@ public final class PokerTablePanel extends JPanel {
         g2.setPaint(backGrad);
         g2.fillRoundRect(cx, cy, w, h, 5, 5);
 
-        // Goldene Zierlinie
+        // goldene zierlinie
         g2.setColor(new Color(212, 175, 55));
         g2.setStroke(new BasicStroke(0.9f));
         g2.drawRoundRect(cx + 2, cy + 2, w - 4, h - 4, 3, 3);
 
-        // Weißer Rand
+        // weißer rand
         g2.setColor(new Color(240, 240, 240));
         g2.drawRoundRect(cx, cy, w, h, 5, 5);
     }

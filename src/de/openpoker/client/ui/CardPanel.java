@@ -13,7 +13,7 @@ import de.openpoker.common.model.Card;
 import de.openpoker.common.model.Suit;
 
 public final class CardPanel extends JPanel {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L; //eclipse warning
     private static final int WIDTH = 68;
     private static final int HEIGHT = 96;
 
@@ -47,7 +47,7 @@ public final class CardPanel extends JPanel {
             return;
         }
 
-        // KI-Hilfe bei Farben, Schatten und der Aufteilung der Zeichenmethoden.
+        // ki-hilfe bei farben, schatten und der aufteilung der zeichenmethoden
         drawCardBackground(g2);
         drawCardBorder(g2);
         drawCardSymbols(g2);
@@ -63,13 +63,13 @@ public final class CardPanel extends JPanel {
     }
 
     private void drawCardBackground(Graphics2D g2) {
-        // Kartenschatten
+        // kartenschatten
         g2.setColor(new Color(0, 0, 0, 35));
         g2.fillRoundRect(5, 7, WIDTH, HEIGHT, 12, 12);
         g2.setColor(new Color(0, 0, 0, 70));
         g2.fillRoundRect(4, 5, WIDTH, HEIGHT, 12, 12);
 
-        // Kartenhintergrund
+        // kartenhintergrund
         GradientPaint bgGradient = new GradientPaint(
             3, 3, new Color(255, 255, 255),
             3, 3 + HEIGHT, new Color(245, 247, 250)
@@ -79,7 +79,7 @@ public final class CardPanel extends JPanel {
     }
 
     private void drawCardBorder(Graphics2D g2) {
-        // Goldener Rand bei Markierung
+        // goldener rand bei markierung
         if (highlighted) {
             g2.setColor(new Color(255, 215, 0));
             g2.setStroke(new BasicStroke(2.5f));

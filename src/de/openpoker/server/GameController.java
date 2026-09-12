@@ -152,7 +152,7 @@ public final class GameController {
         turnId++;
 
         addChat("System: Neue Runde gestartet! Phase: PREFLOP");
-        // KI-Hilfe beim Prüfen des All-in-Falls.
+        // ki-hilfe beim prüfen des all-in-falls
         if (pendingPlayerIds.isEmpty()) {
             advancePhaseUntilActionIsNeeded();
             return;
@@ -206,7 +206,7 @@ public final class GameController {
         int firstActorIndex;
 
         if (readyPlayers.size() == 2) {
-            // Bei zwei Spielern ist der Dealer auch Small Blind.
+            // bei zwei spielern ist der dealer auch small blind
             sbPlayer = dealerPlayer;
             bbPlayer = readyPlayers.get((dealerIndex + 1) % 2);
             firstActorIndex = connectedPlayers.indexOf(sbPlayer);
@@ -428,7 +428,7 @@ public final class GameController {
             playerLastActions.clear();
             preparePendingPlayers();
             if (!pendingPlayerIds.isEmpty()) {
-                // KI-Hilfe bei der Zugreihenfolge nach dem Flop.
+                // ki-hilfe bei der zugreihenfolge nach dem flop
                 int dealerPosition = indexOfConnectedPlayer(currentDealerId);
                 activePlayerIndex = findNextPendingIndex(dealerPosition);
                 broadcastGameState("Neue Phase: " + currentPhase.name());
@@ -446,8 +446,8 @@ public final class GameController {
         String winMessage = status;
         if (winner != null) {
             winner.addChips(pot);
-            playerLastActions.put(winner.getId(), "🏆 GEWINNT " + pot);
-            addChat("🏆 SYSTEM: " + winner.getName() + " gewinnt " + pot
+            playerLastActions.put(winner.getId(), "GEWINNT " + pot);
+            addChat("SYSTEM: " + winner.getName() + " gewinnt " + pot
                 + " Chips (alle anderen haben gepasst).");
             winMessage = winner.getName() + " gewinnt " + pot + " Chips!";
         }
@@ -501,7 +501,7 @@ public final class GameController {
         if (payouts.isEmpty()) {
             List<Player> winners = bestPlayers(eligiblePlayers, results);
             String names = playerNames(winners);
-            addChat("🏆 SYSTEM: " + names + " gewinnt den Showdown mit "
+            addChat("SYSTEM: " + names + " gewinnt den Showdown mit "
                 + results.get(winners.get(0)).description() + " (Pot: 0 Chips).");
             winSummary.append(names).append(" gewinnt mit ").append(results.get(winners.get(0)).description());
         } else {
@@ -510,8 +510,8 @@ public final class GameController {
                 int amount = payout.getValue();
                 HandEvaluator.HandResult result = results.get(player);
                 String reason = result == null ? " zurück" : " mit " + result.description();
-                playerLastActions.put(player.getId(), "🏆 +" + amount + (result != null ? " (" + result.description() + ")" : ""));
-                addChat("🏆 SYSTEM: " + player.getName() + " erhält " + amount + " Chips" + reason + ".");
+                playerLastActions.put(player.getId(), "GEWINNT +" + amount + (result != null ? " (" + result.description() + ")" : ""));
+                addChat("SYSTEM: " + player.getName() + " erhält " + amount + " Chips" + reason + ".");
                 if (winSummary.length() > 0) {
                     winSummary.append(" | ");
                 }
@@ -625,7 +625,7 @@ public final class GameController {
                 pendingPlayerIds.add(player.getId());
             }
         }
-        // KI-Hilfe beim Prüfen eines zu kurzen Blinds.
+        // ki-hilfe beim prüfen eines zu kurzen blinds
         if (pendingPlayerIds.size() == 1) {
             Player remainingPlayer = null;
             for (Player player : connectedPlayers) {
@@ -742,7 +742,7 @@ public final class GameController {
         List<PlayerStateDTO> players = new ArrayList<>();
         for (Player player : connectedPlayers) {
             boolean revealCards = currentPhase == GamePhase.SHOWDOWN
-                && player.isInHand() && !player.isFolded();
+                && player != recipient && player.isInHand() && !player.isFolded();
             List<Card> cards = revealCards ? new ArrayList<>(player.getCards()) : null;
             boolean isDealer = player.getId().equals(currentDealerId);
             PlayerStateDTO playerState = new PlayerStateDTO(

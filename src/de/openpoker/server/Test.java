@@ -17,7 +17,7 @@ import de.openpoker.common.network.PlayerAction;
 import de.openpoker.server.HandEvaluator.HandRank;
 
 public class Test {
-    // Testklasse mit KI-Hilfe erstellt.
+    // testklasse mit ki-hilfe erstellt
     private static int bestanden;
     private static int anzahl;
 

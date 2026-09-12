@@ -1,18 +1,10 @@
 package de.openpoker.client.ui;
 
-import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.GradientPaint;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.List;
@@ -32,7 +24,7 @@ import de.openpoker.common.network.PlayerAction;
 import de.openpoker.common.network.PlayerStateDTO;
 
 public final class PokerWindow extends JFrame {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L; //eclipse warning
 
     private final PokerTablePanel tablePanel = new PokerTablePanel();
     private final JPanel myCardsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 4));
@@ -46,7 +38,7 @@ public final class PokerWindow extends JFrame {
     private final JButton raise50Btn = new ModernButton("RAISE +50", new Color(225, 130, 20), new Color(180, 95, 10));
     private final JButton raise100Btn = new ModernButton("RAISE +100", new Color(225, 110, 15), new Color(180, 80, 10));
     private final JButton allInBtn = new ModernButton("ALL-IN", new Color(215, 40, 20), new Color(160, 20, 10));
-    private final JButton nextRoundBtn = new ModernButton("NÄCHSTE RUNDE ➔", new Color(135, 55, 195), new Color(95, 30, 150));
+    private final JButton nextRoundBtn = new ModernButton("NÄCHSTE RUNDE", new Color(135, 55, 195), new Color(95, 30, 150));
     private final JButton sendBtn = new ModernButton("Senden", new Color(55, 65, 85), new Color(40, 48, 65));
 
     public interface PokerActionListener {
@@ -87,7 +79,7 @@ public final class PokerWindow extends JFrame {
         chatPanel.setBackground(new Color(20, 23, 31));
         chatPanel.setBorder(new EmptyBorder(12, 10, 12, 12));
 
-        JLabel chatTitle = new JLabel("💬 TISCH-CHAT & LOGS", JLabel.CENTER);
+        JLabel chatTitle = new JLabel("TISCH-CHAT & LOGS", JLabel.CENTER);
         chatTitle.setFont(new Font("SansSerif", Font.BOLD, 13));
         chatTitle.setForeground(new Color(190, 195, 210));
         chatTitle.setBorder(new EmptyBorder(0, 0, 10, 0));
@@ -249,7 +241,7 @@ public final class PokerWindow extends JFrame {
                 myCardsPanel.add(cardPanel);
             }
         } else {
-            // Zwei leere Karten anzeigen.
+            // zwei leere karten anzeigen
             for (int i = 0; i < 2; i++) {
                 CardPanel cardPanel = new CardPanel();
                 cardPanel.setCard(null);
@@ -315,16 +307,16 @@ public final class PokerWindow extends JFrame {
             turnStatusLabel.setText(message.isBlank() ? "Warte auf spielbereite Spieler..." : message);
             turnStatusLabel.setForeground(new Color(255, 175, 0));
         } else if (state.phase() == GamePhase.SHOWDOWN) {
-            turnStatusLabel.setText("🏆 " + (message.isBlank() ? "Rundenende – Showdown" : message));
+            turnStatusLabel.setText(message.isBlank() ? "Rundenende – Showdown" : message);
             turnStatusLabel.setForeground(new Color(255, 215, 0));
         } else if (me != null && me.active()) {
-            turnStatusLabel.setText("🎯 DU BIST AM ZUG (" + me.name() + ")");
+            turnStatusLabel.setText("DU BIST AM ZUG (" + me.name() + ")");
             turnStatusLabel.setForeground(new Color(50, 225, 100));
         } else if (active != null) {
-            turnStatusLabel.setText("⏳ " + active.name() + " ist am Zug");
+            turnStatusLabel.setText(active.name() + " ist am Zug");
             turnStatusLabel.setForeground(new Color(100, 180, 255));
         } else if (players.size() < 2) {
-            turnStatusLabel.setText("⏳ Warte auf 2. Spieler... (" + players.size() + "/2)");
+            turnStatusLabel.setText("Warte auf 2. Spieler... (" + players.size() + "/2)");
             turnStatusLabel.setForeground(new Color(255, 175, 0));
         } else {
             turnStatusLabel.setText(message.isBlank() ? "Spiel läuft..." : message);
@@ -341,80 +333,4 @@ public final class PokerWindow extends JFrame {
         return null;
     }
 
-    private static final class ModernButton extends JButton {
-        private static final long serialVersionUID = 1L;
-        private final Color topColor;
-        private final Color bottomColor;
-        private boolean hover;
-
-        ModernButton(String text, Color topColor, Color bottomColor) {
-            super(text);
-            this.topColor = topColor;
-            this.bottomColor = bottomColor;
-            setFont(new Font("SansSerif", Font.BOLD, 12));
-            setForeground(Color.WHITE);
-            setFocusPainted(false);
-            setBorderPainted(false);
-            setContentAreaFilled(false);
-            setOpaque(false);
-            setCursor(new Cursor(Cursor.HAND_CURSOR));
-            setPreferredSize(new Dimension(130, 36));
-
-            addMouseListener(new MouseAdapter() {
-                @Override
-                public void mouseEntered(MouseEvent e) {
-                    hover = true;
-                    repaint();
-                }
-
-                @Override
-                public void mouseExited(MouseEvent e) {
-                    hover = false;
-                    repaint();
-                }
-            });
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            // KI-Hilfe bei Farbverlauf und Hover-Effekt.
-            Graphics2D g2 = (Graphics2D) g;
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-
-            int w = getWidth();
-            int h = getHeight();
-            int arc = 10;
-
-            if (!isEnabled()) {
-                g2.setColor(new Color(45, 48, 58));
-                g2.fillRoundRect(0, 0, w, h, arc, arc);
-                g2.setColor(new Color(100, 105, 120));
-                g2.drawRoundRect(0, 0, w - 1, h - 1, arc, arc);
-                g2.setColor(new Color(120, 125, 140));
-                drawCenteredString(g2, getText(), w, h);
-                return;
-            }
-
-            Color c1 = hover ? topColor.brighter() : topColor;
-            Color c2 = hover ? bottomColor.brighter() : bottomColor;
-
-            GradientPaint gradient = new GradientPaint(0, 0, c1, 0, h, c2);
-            g2.setPaint(gradient);
-            g2.fillRoundRect(0, 0, w, h, arc, arc);
-
-            g2.setColor(new Color(255, 255, 255, hover ? 140 : 80));
-            g2.setStroke(new BasicStroke(1.2f));
-            g2.drawRoundRect(0, 0, w - 1, h - 1, arc, arc);
-
-            g2.setColor(Color.WHITE);
-            drawCenteredString(g2, getText(), w, h);
-        }
-
-        private void drawCenteredString(Graphics2D g2, String text, int w, int h) {
-            int strW = g2.getFontMetrics().stringWidth(text);
-            int strH = g2.getFontMetrics().getAscent();
-            g2.drawString(text, (w - strW) / 2, (h + strH) / 2 - 2);
-        }
-    }
 }

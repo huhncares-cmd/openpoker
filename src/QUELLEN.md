@@ -3,8 +3,9 @@
 Wir haben bei ein paar Stellen KI von OpenAI als Hilfe benutzt:
 
 - Erstellen und Überarbeiten vom `README.md`
-- Erstellen der einfachen `Main`-Klasse als Start für den Client
+
 - Fehlersuche im `GameController`: automatischer Showdown bei All-in, Zugreihenfolge nach dem Flop und ein zu kurzer Big Blind
+- Vereinfachung der Kartendaten: eigene Karten und beim Showdown aufgedeckte Karten wurden klarer getrennt
 - Überprüfung vom `HandEvaluator`, vor allem Kartenkombinationen, Royal Flush und die Straße A-2-3-4-5
 - Erstellen der Testklasse mit Tests zu Deck, Pot, Fold, Call und All-in
 - Aufbau der `Testbeispiele.pdf` aus den Testergebnissen und Screenshots

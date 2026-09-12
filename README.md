@@ -4,7 +4,7 @@ OpenPoker ist ein netzwerkfähiges Multiplayer-Pokerspiel (vereinfachtes Texas H
 
 ---
 
-## 🏗️ 1. Projekt- und Paketstruktur
+## 1. Projekt- und Paketstruktur
 
 Der Code ist in drei funktionale Schichten unterteilt:
 
@@ -37,7 +37,8 @@ src/de/openpoker/
     └── ui/
         ├── PokerWindow.java     # Hauptfenster (Layout, Action-Buttons, Tisch-Chat, Statusleiste)
         ├── PokerTablePanel.java # Graphics2D-Zeichnung: Tisch, Avatare, Dealer-Button, Pots, Karten
-        └── CardPanel.java       # Zeichnet einzelne Spielkarten mit Schattierung, Index und Symbolen
+        ├── CardPanel.java       # Zeichnet einzelne Spielkarten mit Schattierung, Index und Symbolen
+        └── ModernButton.java    # Eigener Button mit Farbverlauf und Hover-Effekt
 ```
 
 ## Programm starten
@@ -48,7 +49,7 @@ src/de/openpoker/
 
 ---
 
-## 🌐 2. Client-Server-Architektur & Datenfluss
+## 2. Client-Server-Architektur & Datenfluss
 
 Die Netzwerkkommunikation basiert auf **TCP-Sockets** und Java-Objektserialisierung (`ObjectInputStream` / `ObjectOutputStream`):
 
@@ -83,13 +84,13 @@ Das Projekt orientiert sich am MVP-Muster:
 * **Presenter:** `Client` verbindet die Oberfläche mit dem Server. Er sendet Aktionen und gibt empfangene Spielstände an die View weiter.
 
 ### Schutz vor Cheaten (Information Hiding):
-* Während der laufenden Hand (Preflop bis River) enthält das `PlayerStateDTO` für fremde Spieler als Handkarten **`null`**.
-* Der Client kennt also im Speicher nur die eigenen Handkarten.
-* Erst beim **Showdown** schickt der Server die Handkarten der verbleibenden Spieler mit, damit der Tisch sie aufdecken kann.
+* Die eigenen Handkarten stehen in `GameStateDTO.myCards`.
+* `PlayerStateDTO.revealedCards` enthält nur öffentlich aufgedeckte Karten anderer Spieler.
+* Erst beim **Showdown** schickt der Server diese Karten mit. Vorher ist das Feld `null`.
 
 ---
 
-## 🎮 3. Spiellogik & Spielphasen (`GameController`)
+## 3. Spiellogik & Spielphasen (`GameController`)
 
 Der `GameController` steuert den vollständigen Ablauf eines Texas Hold'em Spiels:
 
@@ -108,7 +109,7 @@ Der `GameController` steuert den vollständigen Ablauf eines Texas Hold'em Spiel
 
 ---
 
-## 🃏 4. Hand-Auswertungsalgorithmus (`HandEvaluator`)
+## 4. Hand-Auswertungsalgorithmus (`HandEvaluator`)
 
 Der `HandEvaluator` ermittelt beim Showdown für jeden Spieler den exakten Pokerwert:
 
@@ -127,7 +128,7 @@ Der `HandEvaluator` ermittelt beim Showdown für jeden Spieler den exakten Poker
 
 ---
 
-## 💰 5. Side-Pot & Auszahlungslogik (`calculatePayouts`)
+## 5. Side-Pot & Auszahlungslogik (`calculatePayouts`)
 
 Wenn ein Spieler mit wenigen Chips All-In geht, wird der Pot mathematisch korrekt aufgeteilt:
 
@@ -139,7 +140,7 @@ Wenn ein Spieler mit wenigen Chips All-In geht, wird der Pot mathematisch korrek
 
 ---
 
-## 👥 6. Aufgabenverteilung & Präsentationsschwerpunkte
+## 6. Aufgabenverteilung & Präsentationsschwerpunkte
 
 Das Projekt wurde modular in vier gleichwertige Kernbereiche aufgeteilt:
 
@@ -148,7 +149,7 @@ Das Projekt wurde modular in vier gleichwertige Kernbereiche aufgeteilt:
 | **Konrad** | **Netzwerk-Stack & Datenfluss** | `Server.java`, `Client.java`, `ActionType.java`, `PlayerAction.java`, `GameStateDTO.java` | TCP-Sockets, Multithreading (`poker-client-handler`, `poker-reader`), Objekt-Serialisierung, Information Hiding (Cheating-Schutz). |
 | **Leon** | **Spiellogik & State Machine** | `GameController.java`, `GamePhase.java`, `Deck.java`, `GameTable.java` | Zustandsautomat (Preflop bis Showdown), Pflichteinsätze (SB 10 / BB 20), rotierender Dealer-Button, Thread-Sicherheit via `synchronized` und `turnId`. |
 | **Raphael** | **Poker-Mathematik & Algorithmen** | `HandEvaluator.java`, `calculatePayouts()` in `GameController.java` | Hand-Kombinatorik ($\binom{7}{5} = 21$), Ranking-Logik & Wheel-Straße, Tie-Breaker/Kicker-Vergleich (`Comparable<HandResult>`), mathematische Side-Pot-Aufteilung bei All-Ins. |
-| **Alex** | **GUI, Custom Painting & UX** | `PokerWindow.java`, `PokerTablePanel.java`, `CardPanel.java` | 2D-Rendering mit `Graphics2D` (Casino-Filz, Mahagoni-Reling, plastische Karten), trigonometrische Spieler-Verteilung (`sin`/`cos`), responsive Steuerung & `ModernButton`. |
+| **Alex** | **GUI, Custom Painting & UX** | `PokerWindow.java`, `PokerTablePanel.java`, `CardPanel.java`, `ModernButton.java` | 2D-Rendering mit `Graphics2D` (Casino-Filz, Mahagoni-Reling, plastische Karten), trigonometrische Spieler-Verteilung (`sin`/`cos`), responsive Steuerung & `ModernButton`. |
 
 ## Tests
 
