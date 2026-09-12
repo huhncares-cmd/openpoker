@@ -1,6 +1,5 @@
 bin/
 target/
-.settings/
 .metadata/
 pom.xml
 test/
