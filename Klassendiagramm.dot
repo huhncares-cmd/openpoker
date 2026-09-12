@@ -13,9 +13,9 @@ digraph OpenPoker {
     Window [label="PokerWindow\n(Swing JFrame)|- gameState : GameStateDTO\l|+ updateGameState(state)\l+ setConnectionState(...)\l- sendTurnAction(...)\l"];
     TablePanel [label="PokerTablePanel\n(Swing JPanel)|- players : List\l|+ updateTable(...)\l# paintComponent(g)\l"];
     CardPanel [label="CardPanel\n(Swing JPanel)|- card : Card\l|+ setCard(card)\l# paintComponent(g)\l"];
-    Listener [label="«interface, inner»\nPokerActionListener|+ sendAction(action) : boolean"];
+    Listener [label="«interface»\nPokerActionListener|+ sendAction(action) : boolean"];
     Button [label="ModernButton\n(Swing JButton)"];
-    Config [label="«record, inner»\nConnectionConfig|name, host, port"];
+    Config [label="«record»\nConnectionConfig|name, host, port"];
   }
   subgraph cluster_server {
     label="server"; color="#a3cdb5"; style=rounded;
@@ -25,8 +25,8 @@ digraph OpenPoker {
     GameTable [label="GameTable|- pot : int\l- communityCards : List\l|+ addPot(amount)\l+ takePot()\l+ dealCommunityCard()\l"];
     Deck [label="Deck|- cards : List\l|+ reset()\l+ drawCard() : Card\l"];
     Evaluator [label="HandEvaluator|+ evaluateHand(hole, board)\l- evaluateFive(cards)\l"];
-    Result [label="«record, inner» HandResult\nimplements Comparable|rank, tieBreakers, description\l|+ compareTo(other)\l"];
-    HandRank [label="«enum, inner» HandRank|HIGH_CARD ... ROYAL_FLUSH"];
+    Result [label="«record» HandResult\nimplements Comparable|rank, tieBreakers, description\l|+ compareTo(other)\l"];
+    HandRank [label="«enum» HandRank|HIGH_CARD ... ROYAL_FLUSH"];
   }
   subgraph cluster_shared {
     label="common.model / common.network"; color="#d9c49a"; style=rounded;
@@ -46,7 +46,6 @@ digraph OpenPoker {
   Window -> CardPanel [label="0..2"];
   Window -> Listener [label="1"];
   Window -> Button [label="mehrere"];
-  TablePanel -> CardPanel [label="5"];
   Client -> Action [style=dashed, label="sendet"];
   Client -> State [style=dashed, label="empfängt"];
   Server -> Controller [label="1"];
@@ -67,5 +66,5 @@ digraph OpenPoker {
   Action -> ActionType;
   State -> PlayerState [label="0..10"];
   State -> Card [style=dashed];
-  PlayerState -> Card [style=dashed, label="verdeckt: null"];
+  PlayerState -> Card [style=dashed, label="beim Showdown"];
 }

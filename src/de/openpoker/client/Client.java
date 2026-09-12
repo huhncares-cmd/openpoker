@@ -141,8 +141,6 @@ public final class Client {
         }
     }
 
-    private record ConnectionConfig(String name, String host, int port) {}
-
     private static ConnectionConfig promptConnectionSettings() {
         JTextField nameField = new JTextField(System.getProperty("user.name", "Spieler"), 12);
         JTextField hostField = new JTextField(DEFAULT_HOST, 12);

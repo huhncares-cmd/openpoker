@@ -10,54 +10,6 @@ public final class HandEvaluator {
     private HandEvaluator() {
     }
 
-    public enum HandRank {
-        HIGH_CARD(1, "Höchste Karte"),
-        ONE_PAIR(2, "Ein Paar"),
-        TWO_PAIR(3, "Zwei Paare"),
-        THREE_OF_A_KIND(4, "Drilling"),
-        STRAIGHT(5, "Straße"),
-        FLUSH(6, "Flush"),
-        FULL_HOUSE(7, "Full House"),
-        FOUR_OF_A_KIND(8, "Vierling"),
-        STRAIGHT_FLUSH(9, "Straight Flush"),
-        ROYAL_FLUSH(10, "Royal Flush");
-
-        private final int value;
-        private final String name;
-
-        HandRank(int value, String name) {
-            this.value = value;
-            this.name = name;
-        }
-
-        public int getValue() {
-            return value;
-        }
-
-        public String getName() {
-            return name;
-        }
-    }
-
-    public record HandResult(HandRank rank, List<Integer> tieBreakers, String description)
-            implements Comparable<HandResult> {
-        @Override
-        public int compareTo(HandResult other) {
-            int comparison = Integer.compare(rank.getValue(), other.rank.getValue());
-            if (comparison != 0) {
-                return comparison;
-            }
-
-            for (int i = 0; i < tieBreakers.size(); i++) {
-                comparison = Integer.compare(tieBreakers.get(i), other.tieBreakers.get(i));
-                if (comparison != 0) {
-                    return comparison;
-                }
-            }
-            return 0;
-        }
-    }
-
     public static HandResult evaluateHand(List<Card> holeCards, List<Card> communityCards) {
         List<Card> cards = new ArrayList<>();
         cards.addAll(holeCards);

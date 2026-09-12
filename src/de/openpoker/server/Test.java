@@ -14,7 +14,6 @@ import de.openpoker.common.model.Suit;
 import de.openpoker.common.network.ActionType;
 import de.openpoker.common.network.GameStateDTO;
 import de.openpoker.common.network.PlayerAction;
-import de.openpoker.server.HandEvaluator.HandRank;
 
 public class Test {
     // testklasse mit ki-hilfe erstellt
@@ -78,7 +77,7 @@ public class Test {
                 new Card(Suit.DIAMONDS, Rank.FOUR),
                 new Card(Suit.HEARTS, Rank.FIVE));
 
-        HandEvaluator.HandResult ergebnis = HandEvaluator.evaluateHand(hand, tisch);
+        HandResult ergebnis = HandEvaluator.evaluateHand(hand, tisch);
         boolean richtig = ergebnis.rank() == HandRank.STRAIGHT
                 && ergebnis.tieBreakers().get(0) == 5;
         pruefe("A-2-3-4-5 wird als Strasse erkannt", richtig);

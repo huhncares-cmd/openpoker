@@ -468,7 +468,7 @@ public final class GameController {
         enterShowdown();
 
         List<Player> eligiblePlayers = contenders();
-        Map<Player, HandEvaluator.HandResult> results = evaluateHands(eligiblePlayers);
+        Map<Player, HandResult> results = evaluateHands(eligiblePlayers);
         int pot = gameTable.getPot();
         Map<Player, Integer> payouts = calculatePayouts(eligiblePlayers, results, pot);
         gameTable.takePot();
@@ -476,10 +476,10 @@ public final class GameController {
         broadcastGameState(createWinSummary(eligiblePlayers, results, payouts));
     }
 
-    private Map<Player, HandEvaluator.HandResult> evaluateHands(List<Player> players) {
-        Map<Player, HandEvaluator.HandResult> results = new HashMap<>();
+    private Map<Player, HandResult> evaluateHands(List<Player> players) {
+        Map<Player, HandResult> results = new HashMap<>();
         for (Player player : players) {
-            HandEvaluator.HandResult result = HandEvaluator.evaluateHand(
+            HandResult result = HandEvaluator.evaluateHand(
                 player.getCards(), gameTable.getCommunityCards());
             results.put(player, result);
             addChat("System: " + player.getName() + " zeigt " + result.description() + ".");
@@ -495,7 +495,7 @@ public final class GameController {
 
     private String createWinSummary(
             List<Player> eligiblePlayers,
-            Map<Player, HandEvaluator.HandResult> results,
+            Map<Player, HandResult> results,
             Map<Player, Integer> payouts) {
         StringBuilder winSummary = new StringBuilder();
         if (payouts.isEmpty()) {
@@ -508,7 +508,7 @@ public final class GameController {
             for (Map.Entry<Player, Integer> payout : payouts.entrySet()) {
                 Player player = payout.getKey();
                 int amount = payout.getValue();
-                HandEvaluator.HandResult result = results.get(player);
+                HandResult result = results.get(player);
                 String reason = result == null ? " zurück" : " mit " + result.description();
                 playerLastActions.put(player.getId(), "GEWINNT +" + amount + (result != null ? " (" + result.description() + ")" : ""));
                 addChat("SYSTEM: " + player.getName() + " erhält " + amount + " Chips" + reason + ".");
@@ -535,7 +535,7 @@ public final class GameController {
 
     private Map<Player, Integer> calculatePayouts(
             List<Player> eligiblePlayers,
-            Map<Player, HandEvaluator.HandResult> results,
+            Map<Player, HandResult> results,
             int pot) {
         Map<Player, Integer> payouts = new HashMap<>();
         if (pot == 0 || eligiblePlayers.isEmpty()) {
@@ -582,10 +582,10 @@ public final class GameController {
 
     private List<Player> bestPlayers(
             List<Player> candidates,
-            Map<Player, HandEvaluator.HandResult> results) {
-        HandEvaluator.HandResult best = results.get(candidates.get(0));
+            Map<Player, HandResult> results) {
+        HandResult best = results.get(candidates.get(0));
         for (Player player : candidates) {
-            HandEvaluator.HandResult current = results.get(player);
+            HandResult current = results.get(player);
             if (current.compareTo(best) > 0) {
                 best = current;
             }

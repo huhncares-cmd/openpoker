@@ -41,10 +41,6 @@ public final class PokerWindow extends JFrame {
     private final JButton nextRoundBtn = new ModernButton("NÄCHSTE RUNDE", new Color(135, 55, 195), new Color(95, 30, 150));
     private final JButton sendBtn = new ModernButton("Senden", new Color(55, 65, 85), new Color(40, 48, 65));
 
-    public interface PokerActionListener {
-        boolean sendAction(PlayerAction action);
-    }
-
     private PokerActionListener actionListener;
     private GameStateDTO gameState;
     private boolean connected;

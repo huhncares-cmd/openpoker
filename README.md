@@ -27,6 +27,8 @@ src/de/openpoker/
 │   ├── Server.java          # ServerSocket: nimmt Verbindungen an und startet Client-Threads
 │   ├── GameController.java  # Kern-Zustandsautomat: regelt Rundenablauf, Blinds, Einsätze und Pots
 │   ├── HandEvaluator.java   # Algorithmus zur Ermittlung der besten 5-Karten-Kombination
+│   ├── HandRank.java        # Mögliche Rangfolgen einer Pokerhand
+│   ├── HandResult.java      # Ergebnis der Handauswertung mit Vergleichswerten
 │   ├── Player.java          # Verwaltet Spielerdaten, Chipstände und Socket-Streams
 │   ├── GameTable.java       # Hält den Tisch-Pot, Deck und Gemeinschaftskarten
 │   ├── Deck.java            # Standard 52-Karten-Deck mit Misch- und Zieh-Methoden
@@ -34,8 +36,10 @@ src/de/openpoker/
 │
 └── client/             # Client-Anwendung & Benutzeroberfläche
     ├── Client.java          # Client-Socket, Empfangs-Thread und Action-Dispatcher
+    ├── ConnectionConfig.java # Eingaben für Name, Server-Adresse und Port
     └── ui/
         ├── PokerWindow.java     # Hauptfenster (Layout, Action-Buttons, Tisch-Chat, Statusleiste)
+        ├── PokerActionListener.java # Übergibt Aktionen von der GUI an den Client
         ├── PokerTablePanel.java # Graphics2D-Zeichnung: Tisch, Avatare, Dealer-Button, Pots, Karten
         ├── CardPanel.java       # Zeichnet einzelne Spielkarten mit Schattierung, Index und Symbolen
         └── ModernButton.java    # Eigener Button mit Farbverlauf und Hover-Effekt
@@ -146,10 +150,10 @@ Das Projekt wurde modular in vier gleichwertige Kernbereiche aufgeteilt:
 
 | Teammitglied | Schwerpunktbereich | Zuständige Klassen | Hauptthemen in der Präsentation |
 | :--- | :--- | :--- | :--- |
-| **Konrad** | **Netzwerk-Stack & Datenfluss** | `Server.java`, `Client.java`, `ActionType.java`, `PlayerAction.java`, `GameStateDTO.java` | TCP-Sockets, Multithreading (`poker-client-handler`, `poker-reader`), Objekt-Serialisierung, Information Hiding (Cheating-Schutz). |
+| **Konrad** | **Netzwerk-Stack & Datenfluss** | `Server.java`, `Client.java`, `ConnectionConfig.java`, `ActionType.java`, `PlayerAction.java`, `GameStateDTO.java`, `PlayerStateDTO.java` | TCP-Sockets, Multithreading (`poker-client-handler`, `poker-reader`), Objekt-Serialisierung, Information Hiding (Cheating-Schutz). |
 | **Leon** | **Spiellogik & State Machine** | `GameController.java`, `GamePhase.java`, `Deck.java`, `GameTable.java` | Zustandsautomat (Preflop bis Showdown), Pflichteinsätze (SB 10 / BB 20), rotierender Dealer-Button, Thread-Sicherheit via `synchronized` und `turnId`. |
-| **Raphael** | **Poker-Mathematik & Algorithmen** | `HandEvaluator.java`, `calculatePayouts()` in `GameController.java` | Hand-Kombinatorik ($\binom{7}{5} = 21$), Ranking-Logik & Wheel-Straße, Tie-Breaker/Kicker-Vergleich (`Comparable<HandResult>`), mathematische Side-Pot-Aufteilung bei All-Ins. |
-| **Alex** | **GUI, Custom Painting & UX** | `PokerWindow.java`, `PokerTablePanel.java`, `CardPanel.java`, `ModernButton.java` | 2D-Rendering mit `Graphics2D` (Casino-Filz, Mahagoni-Reling, plastische Karten), trigonometrische Spieler-Verteilung (`sin`/`cos`), responsive Steuerung & `ModernButton`. |
+| **Raphael** | **Poker-Mathematik & Algorithmen** | `HandEvaluator.java`, `HandRank.java`, `HandResult.java`, `calculatePayouts()` in `GameController.java` | Hand-Kombinatorik ($\binom{7}{5} = 21$), Ranking-Logik & Wheel-Straße, Tie-Breaker/Kicker-Vergleich (`Comparable<HandResult>`), mathematische Side-Pot-Aufteilung bei All-Ins. |
+| **Alex** | **GUI, Custom Painting & UX** | `PokerWindow.java`, `PokerActionListener.java`, `PokerTablePanel.java`, `CardPanel.java`, `ModernButton.java` | 2D-Rendering mit `Graphics2D` (Casino-Filz, Mahagoni-Reling, plastische Karten), trigonometrische Spieler-Verteilung (`sin`/`cos`), responsive Steuerung & `ModernButton`. |
 
 ## Tests
 
