@@ -152,6 +152,11 @@ public final class GameController {
         turnId++;
 
         addChat("System: Neue Runde gestartet! Phase: PREFLOP");
+        // KI-Hilfe beim Prüfen des All-in-Falls.
+        if (pendingPlayerIds.isEmpty()) {
+            advancePhaseUntilActionIsNeeded();
+            return;
+        }
         broadcastGameState("Neue Runde gestartet.");
     }
 
@@ -201,7 +206,7 @@ public final class GameController {
         int firstActorIndex;
 
         if (readyPlayers.size() == 2) {
-            // Heads-Up: Dealer ist Small Blind und beginnt vor dem Flop.
+            // Bei zwei Spielern ist der Dealer auch Small Blind.
             sbPlayer = dealerPlayer;
             bbPlayer = readyPlayers.get((dealerIndex + 1) % 2);
             firstActorIndex = connectedPlayers.indexOf(sbPlayer);
@@ -423,7 +428,9 @@ public final class GameController {
             playerLastActions.clear();
             preparePendingPlayers();
             if (!pendingPlayerIds.isEmpty()) {
-                activePlayerIndex = findNextPendingIndex(activePlayerIndex);
+                // KI-Hilfe bei der Zugreihenfolge nach dem Flop.
+                int dealerPosition = indexOfConnectedPlayer(currentDealerId);
+                activePlayerIndex = findNextPendingIndex(dealerPosition);
                 broadcastGameState("Neue Phase: " + currentPhase.name());
                 return;
             }
@@ -618,8 +625,18 @@ public final class GameController {
                 pendingPlayerIds.add(player.getId());
             }
         }
-        if (pendingPlayerIds.size() < 2) {
-            pendingPlayerIds.clear();
+        // KI-Hilfe beim Prüfen eines zu kurzen Blinds.
+        if (pendingPlayerIds.size() == 1) {
+            Player remainingPlayer = null;
+            for (Player player : connectedPlayers) {
+                if (pendingPlayerIds.contains(player.getId())) {
+                    remainingPlayer = player;
+                    break;
+                }
+            }
+            if (remainingPlayer != null && remainingPlayer.getCurrentBet() == currentBet) {
+                pendingPlayerIds.clear();
+            }
         }
     }
 

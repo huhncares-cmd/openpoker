@@ -1,6 +1,6 @@
 # OpenPoker – Technische Dokumentation & Architektur
 
-OpenPoker ist ein netzwerkfähiges Multiplayer-Pokerspiel (Texas Hold'em No-Limit), umgesetzt in Java mit Swing-GUI und Socket-Kommunikation.
+OpenPoker ist ein netzwerkfähiges Multiplayer-Pokerspiel (vereinfachtes Texas Hold'em), umgesetzt in Java mit Swing-GUI und Socket-Kommunikation.
 
 ---
 
@@ -10,6 +10,7 @@ Der Code ist in drei funktionale Schichten unterteilt:
 
 ```
 src/de/openpoker/
+├── Main.java           # Einstiegspunkt für den Client
 ├── common/             # Geteilte Datenmodelle und Netzwerk-DTOs
 │   ├── model/
 │   │   ├── Card.java        # Record für eine Spielkarte (Farbe + Wert)
@@ -28,7 +29,8 @@ src/de/openpoker/
 │   ├── HandEvaluator.java   # Algorithmus zur Ermittlung der besten 5-Karten-Kombination
 │   ├── Player.java          # Verwaltet Spielerdaten, Chipstände und Socket-Streams
 │   ├── GameTable.java       # Hält den Tisch-Pot, Deck und Gemeinschaftskarten
-│   └── Deck.java            # Standard 52-Karten-Deck mit Misch- und Zieh-Methoden
+│   ├── Deck.java            # Standard 52-Karten-Deck mit Misch- und Zieh-Methoden
+│   └── Test.java            # Einfache Tests mit Konsolenausgabe
 │
 └── client/             # Client-Anwendung & Benutzeroberfläche
     ├── Client.java          # Client-Socket, Empfangs-Thread und Action-Dispatcher
@@ -37,6 +39,12 @@ src/de/openpoker/
         ├── PokerTablePanel.java # Graphics2D-Zeichnung: Tisch, Avatare, Dealer-Button, Pots, Karten
         └── CardPanel.java       # Zeichnet einzelne Spielkarten mit Schattierung, Index und Symbolen
 ```
+
+## Programm starten
+
+1. `de.openpoker.server.Server` als Java-Anwendung starten.
+2. Danach `de.openpoker.Main` für jeden Client als Java-Anwendung starten.
+3. Spielername und Server-Adresse eingeben. Der Standard-Port ist `8888`.
 
 ---
 
@@ -66,6 +74,14 @@ Die Netzwerkkommunikation basiert auf **TCP-Sockets** und Java-Objektserialisier
 
 `PlayerAction` ist eine normale Datenklasse. Das Enum `ActionType` legt fest, ob es sich zum Beispiel um `FOLD`, `CALL` oder `RAISE` handelt. Je nach Typ werden zusätzlich die Zugnummer, der Raise-Betrag oder eine Chat-Nachricht verwendet.
 
+### MVP-Aufteilung
+
+Das Projekt orientiert sich am MVP-Muster:
+
+* **Model:** Die Klassen in `server` und die Datenklassen in `common` enthalten Spielzustand und Regeln.
+* **View:** `PokerWindow`, `PokerTablePanel` und `CardPanel` zeigen den Zustand an und nehmen Eingaben entgegen.
+* **Presenter:** `Client` verbindet die Oberfläche mit dem Server. Er sendet Aktionen und gibt empfangene Spielstände an die View weiter.
+
 ### Schutz vor Cheaten (Information Hiding):
 * Während der laufenden Hand (Preflop bis River) enthält das `PlayerStateDTO` für fremde Spieler als Handkarten **`null`**.
 * Der Client kennt also im Speicher nur die eigenen Handkarten.
@@ -88,7 +104,7 @@ Der `GameController` steuert den vollständigen Ablauf eines Texas Hold'em Spiel
      * **Turn**: 1 weitere Karte wird aufgedeckt.
      * **River**: Die 5. und letzte Gemeinschaftskarte wird aufgedeckt.
 3. **Sonderfall Fold-Sieg**:
-   * Wenn alle bis auf einen Spieler folden, gewinnt der letzte verbleibende Spieler sofort den Pot, ohne seine Hand aufdecken zu müssen.
+   * Wenn alle bis auf einen Spieler folden, gewinnt der letzte verbleibende Spieler sofort den Pot ohne einen Handvergleich.
 
 ---
 
@@ -133,3 +149,8 @@ Das Projekt wurde modular in vier gleichwertige Kernbereiche aufgeteilt:
 | **Leon** | **Spiellogik & State Machine** | `GameController.java`, `GamePhase.java`, `Deck.java`, `GameTable.java` | Zustandsautomat (Preflop bis Showdown), Pflichteinsätze (SB 10 / BB 20), rotierender Dealer-Button, Thread-Sicherheit via `synchronized` und `turnId`. |
 | **Raphael** | **Poker-Mathematik & Algorithmen** | `HandEvaluator.java`, `calculatePayouts()` in `GameController.java` | Hand-Kombinatorik ($\binom{7}{5} = 21$), Ranking-Logik & Wheel-Straße, Tie-Breaker/Kicker-Vergleich (`Comparable<HandResult>`), mathematische Side-Pot-Aufteilung bei All-Ins. |
 | **Alex** | **GUI, Custom Painting & UX** | `PokerWindow.java`, `PokerTablePanel.java`, `CardPanel.java` | 2D-Rendering mit `Graphics2D` (Casino-Filz, Mahagoni-Reling, plastische Karten), trigonometrische Spieler-Verteilung (`sin`/`cos`), responsive Steuerung & `ModernButton`. |
+
+## Tests
+
+Die Klasse `de.openpoker.server.Test` kann als Java-Anwendung gestartet werden. Sie gibt für jeden Test `OK` oder `FEHLER` aus.
+Die Ergebnisse und weitere Screenshots stehen in der `Testbeispiele.pdf`.

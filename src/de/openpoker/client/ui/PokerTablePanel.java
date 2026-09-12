@@ -64,6 +64,7 @@ public final class PokerTablePanel extends JPanel {
     }
 
     @Override
+    // Mit KI-Hilfe in kleinere Zeichenmethoden aufgeteilt.
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g;
@@ -73,8 +74,16 @@ public final class PokerTablePanel extends JPanel {
         int margin = 28;
         int w = getWidth() - (margin * 2);
         int h = getHeight() - (margin * 2);
+        float centerX = getWidth() / 2f;
+        float centerY = getHeight() / 2f;
 
-        // 1. Äußerer Tischrand (Edler Mahagoni-/Leder-Look mit Farbverlauf)
+        drawTableRail(g2, margin, w, h);
+        drawTableFelt(g2, margin, w, h, centerX, centerY);
+        drawCenterCircle(g2, centerX, centerY);
+        drawPlayers(g2, w, h, centerX, centerY);
+    }
+
+    private void drawTableRail(Graphics2D g2, int margin, int w, int h) {
         GradientPaint railGradient = new GradientPaint(
             margin, margin, new Color(42, 22, 14),
             margin + w, margin + h, new Color(24, 12, 8)
@@ -82,20 +91,18 @@ public final class PokerTablePanel extends JPanel {
         g2.setPaint(railGradient);
         g2.fillRoundRect(margin, margin, w, h, 85, 85);
 
-        // Weicher Rand-Schatten
         g2.setColor(new Color(0, 0, 0, 90));
         g2.drawRoundRect(margin, margin, w, h, 85, 85);
 
-        // 2. Äußere Gold-Zierlinie
         g2.setColor(new Color(212, 175, 55, 160));
         g2.setStroke(new BasicStroke(1.5f));
         g2.drawRoundRect(margin + 6, margin + 6, w - 12, h - 12, 75, 75);
+    }
 
-        // 3. Grüner Casino-Filz mit Radial-Verlauf (Zentrum heller smaragdgrün, Rand samtig dunkelgrün)
-        float centerX = getWidth() / 2f;
-        float centerY = getHeight() / 2f;
+    private void drawTableFelt(
+            Graphics2D g2, int margin, int w, int h,
+            float centerX, float centerY) {
         float radius = Math.max(w, h) / 1.6f;
-
         RadialGradientPaint feltGradient = new RadialGradientPaint(
             new Point2D.Float(centerX, centerY - 10),
             radius,
@@ -109,40 +116,39 @@ public final class PokerTablePanel extends JPanel {
         g2.setPaint(feltGradient);
         g2.fillRoundRect(margin + 14, margin + 14, w - 28, h - 28, 68, 68);
 
-        // 4. Innere goldene Tischlinie
         g2.setColor(new Color(212, 175, 55, 140));
         g2.setStroke(new BasicStroke(1.5f));
         g2.drawRoundRect(margin + 20, margin + 20, w - 40, h - 40, 60, 60);
+    }
 
-        // 5. Dezenter Tisch-Wasserzeichen-Bogen in der Mitte
+    private void drawCenterCircle(Graphics2D g2, float centerX, float centerY) {
         g2.setColor(new Color(255, 255, 255, 12));
         g2.setStroke(new BasicStroke(2.0f));
         g2.drawOval((int) (centerX - 140), (int) (centerY - 55), 280, 110);
+    }
 
-        // 6. Spieler zeichnen
-        if (!players.isEmpty()) {
-            int numPlayers = players.size();
-            double radiusX = (w / 2.0) - 48;
-            double radiusY = (h / 2.0) - 42;
+    private void drawPlayers(Graphics2D g2, int w, int h, float centerX, float centerY) {
+        int numPlayers = players.size();
+        double radiusX = (w / 2.0) - 48;
+        double radiusY = (h / 2.0) - 42;
 
-            for (int i = 0; i < numPlayers; i++) {
-                PlayerStateDTO player = players.get(i);
-
-                double angle;
-                if (numPlayers == 1) {
-                    angle = Math.PI / 2;
-                } else {
-                    double startAngle = Math.PI * 0.88;
-                    double endAngle = Math.PI * 0.12;
-                    angle = startAngle - (i * (startAngle - endAngle) / (numPlayers - 1));
-                }
-
-                int px = (int) (centerX + radiusX * Math.cos(angle));
-                int py = (int) (centerY + 10 + radiusY * Math.sin(angle));
-
-                drawPlayerAvatar(g2, px, py, player);
-            }
+        for (int i = 0; i < numPlayers; i++) {
+            PlayerStateDTO player = players.get(i);
+            double angle = calculatePlayerAngle(i, numPlayers);
+            int px = (int) (centerX + radiusX * Math.cos(angle));
+            int py = (int) (centerY + 10 + radiusY * Math.sin(angle));
+            drawPlayerAvatar(g2, px, py, player);
         }
+    }
+
+    // KI-Hilfe bei der Berechnung der Spielerpositionen.
+    private double calculatePlayerAngle(int playerIndex, int numPlayers) {
+        if (numPlayers == 1) {
+            return Math.PI / 2;
+        }
+        double startAngle = Math.PI * 0.88;
+        double endAngle = Math.PI * 0.12;
+        return startAngle - (playerIndex * (startAngle - endAngle) / (numPlayers - 1));
     }
 
     private void drawPlayerAvatar(Graphics2D g2, int x, int y, PlayerStateDTO player) {
@@ -302,7 +308,7 @@ public final class PokerTablePanel extends JPanel {
         g2.setColor(Color.WHITE);
         g2.fillRoundRect(cx, cy, w, h, 6, 6);
 
-        // Rand (Gold bei Gewinner, sonst dezent Grau)
+        // Goldener Rand beim Gewinner
         g2.setColor(isWinner ? new Color(255, 215, 0) : new Color(180, 180, 180));
         g2.setStroke(new BasicStroke(isWinner ? 2.0f : 1.0f));
         g2.drawRoundRect(cx, cy, w, h, 6, 6);
@@ -328,7 +334,7 @@ public final class PokerTablePanel extends JPanel {
         g2.setColor(new Color(0, 0, 0, 80));
         g2.fillRoundRect(cx + 1, cy + 1, w, h, 5, 5);
 
-        // Blauer Kartenrücken mit Farbverlauf
+        // Blauer Kartenrücken
         GradientPaint backGrad = new GradientPaint(
             cx, cy, new Color(30, 55, 130),
             cx + w, cy + h, new Color(18, 32, 85)

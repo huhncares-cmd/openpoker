@@ -42,77 +42,85 @@ public final class CardPanel extends JPanel {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
-        int x = 3;
-        int y = 3;
-        int w = WIDTH;
-        int h = HEIGHT;
-        int arc = 12;
-
         if (card == null) {
-            // Leerer Kartenslot (Dezente gestrichelte Umrandung auf dem Tisch)
-            g2.setColor(new Color(0, 0, 0, 40));
-            g2.fillRoundRect(x, y, w, h, arc, arc);
-            g2.setColor(new Color(255, 255, 255, 40));
-            float[] dash = {6f, 4f};
-            g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, dash, 0f));
-            g2.drawRoundRect(x, y, w, h, arc, arc);
+            drawEmptySlot(g2);
             return;
         }
 
-        // 1. Weicher Kartenschatten
-        g2.setColor(new Color(0, 0, 0, 35));
-        g2.fillRoundRect(x + 2, y + 4, w, h, arc, arc);
-        g2.setColor(new Color(0, 0, 0, 70));
-        g2.fillRoundRect(x + 1, y + 2, w, h, arc, arc);
+        // KI-Hilfe bei Farben, Schatten und der Aufteilung der Zeichenmethoden.
+        drawCardBackground(g2);
+        drawCardBorder(g2);
+        drawCardSymbols(g2);
+    }
 
-        // 2. Kartenhintergrund (Edles Elfenbein-Weiß mit leichtem Verlauf)
+    private void drawEmptySlot(Graphics2D g2) {
+        g2.setColor(new Color(0, 0, 0, 40));
+        g2.fillRoundRect(3, 3, WIDTH, HEIGHT, 12, 12);
+        g2.setColor(new Color(255, 255, 255, 40));
+        float[] dash = {6f, 4f};
+        g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 10f, dash, 0f));
+        g2.drawRoundRect(3, 3, WIDTH, HEIGHT, 12, 12);
+    }
+
+    private void drawCardBackground(Graphics2D g2) {
+        // Kartenschatten
+        g2.setColor(new Color(0, 0, 0, 35));
+        g2.fillRoundRect(5, 7, WIDTH, HEIGHT, 12, 12);
+        g2.setColor(new Color(0, 0, 0, 70));
+        g2.fillRoundRect(4, 5, WIDTH, HEIGHT, 12, 12);
+
+        // Kartenhintergrund
         GradientPaint bgGradient = new GradientPaint(
-            x, y, new Color(255, 255, 255),
-            x, y + h, new Color(245, 247, 250)
+            3, 3, new Color(255, 255, 255),
+            3, 3 + HEIGHT, new Color(245, 247, 250)
         );
         g2.setPaint(bgGradient);
-        g2.fillRoundRect(x, y, w, h, arc, arc);
+        g2.fillRoundRect(3, 3, WIDTH, HEIGHT, 12, 12);
+    }
 
-        // 3. Kartenrand (Gold bei Highlight, sonst dezent Silbergrau)
+    private void drawCardBorder(Graphics2D g2) {
+        // Goldener Rand bei Markierung
         if (highlighted) {
             g2.setColor(new Color(255, 215, 0));
             g2.setStroke(new BasicStroke(2.5f));
-            g2.drawRoundRect(x, y, w, h, arc, arc);
         } else {
             g2.setColor(new Color(210, 215, 225));
             g2.setStroke(new BasicStroke(1.0f));
-            g2.drawRoundRect(x, y, w, h, arc, arc);
         }
+        g2.drawRoundRect(3, 3, WIDTH, HEIGHT, 12, 12);
+    }
 
-        // 4. Farben & Symbole
+    private void drawCardSymbols(Graphics2D g2) {
         boolean isRed = card.suit() == Suit.HEARTS || card.suit() == Suit.DIAMONDS;
         Color primaryColor = isRed ? new Color(215, 35, 35) : new Color(28, 30, 38);
-
         String suitSymbol = card.suit().getSymbol();
         String rankStr = card.rank().getSymbol();
 
-        // 5. Dekorativer Hintergrund-Wasserzeichen-Suit in der Kartenmitte
+        drawCenterSymbol(g2, primaryColor, suitSymbol);
+        drawCardCorners(g2, primaryColor, suitSymbol, rankStr);
+    }
+
+    private void drawCenterSymbol(Graphics2D g2, Color color, String suitSymbol) {
         g2.setFont(new Font("SansSerif", Font.BOLD, 38));
         int centerSymW = g2.getFontMetrics().stringWidth(suitSymbol);
-        g2.setColor(primaryColor);
-        g2.drawString(suitSymbol, x + (w - centerSymW) / 2, y + h / 2 + 13);
+        g2.setColor(color);
+        g2.drawString(suitSymbol, 3 + (WIDTH - centerSymW) / 2, 3 + HEIGHT / 2 + 13);
+    }
 
-        // 6. Ecke Oben Links (Wert + Symbol)
-        g2.setColor(primaryColor);
+    private void drawCardCorners(Graphics2D g2, Color color, String suitSymbol, String rankStr) {
+        g2.setColor(color);
         g2.setFont(new Font("SansSerif", Font.BOLD, 13));
-        g2.drawString(rankStr, x + 7, y + 16);
+        g2.drawString(rankStr, 10, 19);
 
         g2.setFont(new Font("SansSerif", Font.PLAIN, 12));
-        g2.drawString(suitSymbol, x + 7, y + 28);
+        g2.drawString(suitSymbol, 10, 31);
 
-        // 7. Ecke Unten Rechts (Kopfstehend / Invertiert für echten Karten-Look)
-        g2.setFont(new Font("SansSerif", Font.PLAIN, 12));
         int symW = g2.getFontMetrics().stringWidth(suitSymbol);
-        g2.drawString(suitSymbol, x + w - symW - 7, y + h - 18);
+        g2.drawString(suitSymbol, 3 + WIDTH - symW - 7, 3 + HEIGHT - 18);
 
         g2.setFont(new Font("SansSerif", Font.BOLD, 13));
         int rankW = g2.getFontMetrics().stringWidth(rankStr);
-        g2.drawString(rankStr, x + w - rankW - 7, y + h - 6);
+        g2.drawString(rankStr, 3 + WIDTH - rankW - 7, 3 + HEIGHT - 6);
     }
 
 }

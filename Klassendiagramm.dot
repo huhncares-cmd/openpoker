@@ -1,0 +1,71 @@
+digraph OpenPoker {
+  graph [rankdir=LR, bgcolor="white", fontname="DejaVu Sans", fontsize=15,
+         label="OpenPoker — Klassendiagramm",
+         labelloc=t, nodesep=0.30, ranksep=0.60, pad=0.25];
+  node [shape=record, fontname="DejaVu Sans", fontsize=10, style=filled,
+        fillcolor="#f5f8fc", color="#50647d", margin="0.10,0.07"];
+  edge [fontname="DejaVu Sans", fontsize=8, color="#61748b", arrowsize=0.65];
+
+  Main [label="Main|+ main(args) : void"];
+  subgraph cluster_client {
+    label="client / client.ui"; color="#9bbedb"; style=rounded;
+    Client [label="Client\n(Presenter)|- host : String\l- port : int\l- socket : Socket\l|+ start()\l+ close()\l- receiveGameStates(...)\l"];
+    Window [label="PokerWindow\n(Swing JFrame)|- gameState : GameStateDTO\l|+ updateGameState(state)\l+ setConnectionState(...)\l- sendTurnAction(...)\l"];
+    TablePanel [label="PokerTablePanel\n(Swing JPanel)|- players : List\l|+ updateTable(...)\l# paintComponent(g)\l"];
+    CardPanel [label="CardPanel\n(Swing JPanel)|- card : Card\l|+ setCard(card)\l# paintComponent(g)\l"];
+    Listener [label="«interface, inner»\nPokerActionListener|+ sendAction(action) : boolean"];
+    Button [label="«inner» ModernButton\n(Swing JButton)"];
+    Config [label="«record, inner»\nConnectionConfig|name, host, port"];
+  }
+  subgraph cluster_server {
+    label="server"; color="#a3cdb5"; style=rounded;
+    Server [label="Server|- port : int\l|+ start()\l+ main(args) : void\l- handleClient(socket)\l"];
+    Controller [label="GameController|- connectedPlayers : List\l- handPlayers : List\l- pendingPlayerIds : Set\l- currentPhase : GamePhase\l- currentBet : int\l- turnId : long\l|+ addPlayer(...)\l+ removePlayer(player)\l+ handleAction(...)\l~ snapshot(player)\l- calculatePayouts(...)\l"];
+    Player [label="Player|- chips : int\l- currentBet : int\l- handContribution : int\l- cards : List\l- out : ObjectOutputStream\l|+ commitChips(amount)\l+ prepareForHand(...)\l+ send(state)\l"];
+    GameTable [label="GameTable|- pot : int\l- communityCards : List\l|+ addPot(amount)\l+ takePot()\l+ dealCommunityCard()\l"];
+    Deck [label="Deck|- cards : List\l|+ reset()\l+ drawCard() : Card\l"];
+    Evaluator [label="HandEvaluator|+ evaluateHand(hole, board)\l- evaluateFive(cards)\l"];
+    Result [label="«record, inner» HandResult\nimplements Comparable|rank, tieBreakers, description\l|+ compareTo(other)\l"];
+    HandRank [label="«enum, inner» HandRank|HIGH_CARD ... ROYAL_FLUSH"];
+  }
+  subgraph cluster_shared {
+    label="common.model / common.network"; color="#d9c49a"; style=rounded;
+    Card [label="«record» Card|suit : Suit\lrank : Rank\l"];
+    Suit [label="«enum» Suit|CLUBS, DIAMONDS\lHEARTS, SPADES\l"];
+    Rank [label="«enum» Rank|TWO ... ACE"];
+    Phase [label="«enum» GamePhase|WAITING_FOR_PLAYERS\lPREFLOP, FLOP, TURN\lRIVER, SHOWDOWN\l"];
+    Action [label="PlayerAction|type, turnId\lamount, message\l"];
+    ActionType [label="«enum» ActionType|FOLD, CHECK, CALL\lRAISE, CHAT, NEXT_ROUND\l"];
+    State [label="«record» GameStateDTO|pot, currentBet, phase, turnId\lcommunityCards, myCards\lmyPlayerId, players\lstatusMessage, chatHistory\l"];
+    PlayerState [label="«record» PlayerStateDTO|id, name, chips, currentBet\linHand, folded, allIn, active\llastAction, cards, isDealer\l"];
+  }
+  Main -> Client [style=dashed, label="startet"];
+  Client -> Window [label="1"];
+  Client -> Config [style=dashed];
+  Window -> TablePanel [label="1"];
+  Window -> CardPanel [label="0..2"];
+  Window -> Listener [label="1"];
+  Window -> Button [label="mehrere"];
+  TablePanel -> CardPanel [label="5"];
+  Client -> Action [style=dashed, label="sendet"];
+  Client -> State [style=dashed, label="empfängt"];
+  Server -> Controller [label="1"];
+  Controller -> Player [label="verbunden: 0..10\lHand: 0..10\l"];
+  Controller -> GameTable [label="1"];
+  GameTable -> Deck [label="1"];
+  Controller -> Evaluator [style=dashed, label="nutzt"];
+  Controller -> Phase [style=dashed];
+  Controller -> State [style=dashed, label="erstellt je Empfänger"];
+  Controller -> Action [style=dashed, label="prüft"];
+  Evaluator -> Result [style=dashed, label="liefert"];
+  Result -> HandRank;
+  Player -> Card [label="0..2"];
+  GameTable -> Card [label="0..5"];
+  Deck -> Card [label="0..52"];
+  Card -> Suit;
+  Card -> Rank;
+  Action -> ActionType;
+  State -> PlayerState [label="0..10"];
+  State -> Card [style=dashed];
+  PlayerState -> Card [style=dashed, label="verdeckt: null"];
+}

@@ -68,6 +68,7 @@ public final class HandEvaluator {
         }
 
         HandResult best = null;
+        // KI-Hilfe beim Prüfen der Kartenkombinationen.
         if (cards.size() == 6) {
             for (int skip = 0; skip < cards.size(); skip++) {
                 HandResult result = evaluateWithout(cards, skip, -1);
@@ -76,7 +77,7 @@ public final class HandEvaluator {
                 }
             }
         } else {
-            // Bei 7 Karten werden jeweils 2 weggelassen: 7 über 2 = 21 Möglichkeiten.
+            // Bei 7 Karten werden immer 2 weggelassen (21 Möglichkeiten).
             for (int skipOne = 0; skipOne < cards.size(); skipOne++) {
                 for (int skipTwo = skipOne + 1; skipTwo < cards.size(); skipTwo++) {
                     HandResult result = evaluateWithout(cards, skipOne, skipTwo);
@@ -126,7 +127,7 @@ public final class HandEvaluator {
             }
         }
 
-        // Flush prüfen: Haben alle 5 Karten dieselbe Farbe?
+        // Alle Karten müssen dieselbe Farbe haben.
         boolean flush = true;
         Suit firstSuit = cards.get(0).suit();
         for (Card card : cards) {
@@ -188,7 +189,7 @@ public final class HandEvaluator {
             return 0;
         }
 
-        // Sonderfall: Wheel-Straße (Ass als 1: A-2-3-4-5)
+        // Beim Wheel zählt das Ass als 1.
         if (ranks.equals(List.of(2, 3, 4, 5, 14))) {
             return 5;
         }
