@@ -100,7 +100,7 @@ Der `GameController` steuert den vollständigen Ablauf eines Texas Hold'em Spiel
 
 1. **Rundenbeginn & Blinds**:
    * Der Dealer-Button wandert reihum (`dealerIndex`).
-   * Die beiden Spieler nach dem Dealer zahlen automatisch **Small Blind (10)** und **Big Blind (20)** ein.
+   * Bei zwei Spielern zahlt der Dealer den **Small Blind (10)** und der andere Spieler den **Big Blind (20)**. Bei mehr Spielern zahlen die ersten beiden Spieler nach dem Dealer.
    * Der Mindesteinsatz der Runde (`currentBet`) wird auf 20 gesetzt.
 2. **Setzrunden (Preflop $\rightarrow$ Flop $\rightarrow$ Turn $\rightarrow$ River)**:
    * Jeder Spieler am Zug kann **Folden**, **Checken** (wenn kein Einsatz offen ist), **Callen** oder **Raisen** (+50, +100 oder All-In).
