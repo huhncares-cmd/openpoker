@@ -15,87 +15,36 @@ public final class HandEvaluator {
         cards.addAll(holeCards);
         cards.addAll(communityCards);
 
-        if (cards.size() == 5) {
-            return evaluateFive(cards);
+        return findBestFive(cards, 0, new ArrayList<>());
+    }
+
+    private static HandResult findBestFive(List<Card> cards, int startIndex, List<Card> chosen) {
+        if (chosen.size() == 5) {
+            return evaluateFive(chosen);
         }
 
         HandResult best = null;
-        // ki-hilfe beim prüfen der kartenkombinationen
-        if (cards.size() == 6) {
-            for (int skip = 0; skip < cards.size(); skip++) {
-                HandResult result = evaluateWithout(cards, skip, -1);
-                if (best == null || result.compareTo(best) > 0) {
-                    best = result;
-                }
+        int needed = 5 - chosen.size();
+        for (int index = startIndex; index <= cards.size() - needed; index++) {
+            chosen.add(cards.get(index));
+            HandResult candidate = findBestFive(cards, index + 1, chosen);
+            if (best == null || candidate.compareTo(best) > 0) {
+                best = candidate;
             }
-        } else {
-            // bei 7 karten werden immer 2 weggelassen (21 möglichkeiten)
-            for (int skipOne = 0; skipOne < cards.size(); skipOne++) {
-                for (int skipTwo = skipOne + 1; skipTwo < cards.size(); skipTwo++) {
-                    HandResult result = evaluateWithout(cards, skipOne, skipTwo);
-                    if (best == null || result.compareTo(best) > 0) {
-                        best = result;
-                    }
-                }
-            }
+            chosen.remove(chosen.size() - 1);
         }
         return best;
     }
 
-    private static HandResult evaluateWithout(List<Card> cards, int skipOne, int skipTwo) {
-        List<Card> fiveCards = new ArrayList<>();
-        for (int index = 0; index < cards.size(); index++) {
-            if (index != skipOne && index != skipTwo) {
-                fiveCards.add(cards.get(index));
-            }
-        }
-        return evaluateFive(fiveCards);
-    }
-
     private static HandResult evaluateFive(List<Card> cards) {
-        int[] rankCounts = new int[15];
-        List<Integer> ranksDescending = new ArrayList<>();
-        for (Card card : cards) {
-            int value = card.rank().getValue();
-            rankCounts[value]++;
-        }
+        int[] rankCounts = countRanks(cards);
+        boolean flush = isFlush(cards);
+        int straightHigh = findStraightHigh(rankCounts);
 
-        List<Integer> fourOfAKind = new ArrayList<>();
-        List<Integer> threeOfAKind = new ArrayList<>();
-        List<Integer> pairs = new ArrayList<>();
-        List<Integer> singleCards = new ArrayList<>();
-        for (int value = 14; value >= 2; value--) {
-            for (int count = 0; count < rankCounts[value]; count++) {
-                ranksDescending.add(value);
-            }
-            if (rankCounts[value] == 4) {
-                fourOfAKind.add(value);
-            } else if (rankCounts[value] == 3) {
-                threeOfAKind.add(value);
-            } else if (rankCounts[value] == 2) {
-                pairs.add(value);
-            } else if (rankCounts[value] == 1) {
-                singleCards.add(value);
-            }
-        }
-
-        // alle karten müssen dieselbe farbe haben
-        boolean flush = true;
-        Suit firstSuit = cards.get(0).suit();
-        for (Card card : cards) {
-            if (card.suit() != firstSuit) {
-                flush = false;
-                break;
-            }
-        }
-
-        List<Integer> ranksAscending = new ArrayList<>();
-        for (int value = 2; value <= 14; value++) {
-            if (rankCounts[value] > 0) {
-                ranksAscending.add(value);
-            }
-        }
-        int straightHigh = straightHigh(ranksAscending);
+        List<Integer> fourOfAKind = ranksWithCount(rankCounts, 4);
+        List<Integer> threeOfAKind = ranksWithCount(rankCounts, 3);
+        List<Integer> pairs = ranksWithCount(rankCounts, 2);
+        List<Integer> singleCards = ranksWithCount(rankCounts, 1);
 
         if (flush && straightHigh == 14) {
             return result(HandRank.ROYAL_FLUSH, List.of(14));
@@ -112,28 +61,80 @@ public final class HandEvaluator {
                     List.of(threeOfAKind.get(0), pairs.get(0)));
         }
         if (flush) {
-            return result(HandRank.FLUSH, ranksDescending);
+            return result(HandRank.FLUSH, ranksDescending(rankCounts));
         }
         if (straightHigh > 0) {
             return result(HandRank.STRAIGHT, List.of(straightHigh));
         }
         if (!threeOfAKind.isEmpty()) {
-            List<Integer> tieBreakers = new ArrayList<>();
-            tieBreakers.add(threeOfAKind.get(0));
-            tieBreakers.addAll(singleCards);
-            return result(HandRank.THREE_OF_A_KIND, tieBreakers);
+            return result(HandRank.THREE_OF_A_KIND,
+                    buildTieBreakers(threeOfAKind.get(0), singleCards));
         }
         if (pairs.size() >= 2) {
             return result(HandRank.TWO_PAIR,
                     List.of(pairs.get(0), pairs.get(1), singleCards.get(0)));
         }
         if (pairs.size() == 1) {
-            List<Integer> tieBreakers = new ArrayList<>();
-            tieBreakers.add(pairs.get(0));
-            tieBreakers.addAll(singleCards);
-            return result(HandRank.ONE_PAIR, tieBreakers);
+            return result(HandRank.ONE_PAIR,
+                    buildTieBreakers(pairs.get(0), singleCards));
         }
-        return result(HandRank.HIGH_CARD, ranksDescending);
+        return result(HandRank.HIGH_CARD, ranksDescending(rankCounts));
+    }
+
+    private static int[] countRanks(List<Card> cards) {
+        int[] rankCounts = new int[15];
+        for (Card card : cards) {
+            rankCounts[card.rank().getValue()]++;
+        }
+        return rankCounts;
+    }
+
+    private static List<Integer> ranksWithCount(int[] rankCounts, int targetCount) {
+        List<Integer> ranks = new ArrayList<>();
+        for (int value = 14; value >= 2; value--) {
+            if (rankCounts[value] == targetCount) {
+                ranks.add(value);
+            }
+        }
+        return ranks;
+    }
+
+    private static List<Integer> ranksDescending(int[] rankCounts) {
+        List<Integer> ranks = new ArrayList<>();
+        for (int value = 14; value >= 2; value--) {
+            for (int count = 0; count < rankCounts[value]; count++) {
+                ranks.add(value);
+            }
+        }
+        return ranks;
+    }
+
+    private static boolean isFlush(List<Card> cards) {
+        // alle karten müssen dieselbe farbe haben
+        Suit firstSuit = cards.get(0).suit();
+        for (Card card : cards) {
+            if (card.suit() != firstSuit) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int findStraightHigh(int[] rankCounts) {
+        List<Integer> ranksAscending = new ArrayList<>();
+        for (int value = 2; value <= 14; value++) {
+            if (rankCounts[value] > 0) {
+                ranksAscending.add(value);
+            }
+        }
+        return straightHigh(ranksAscending);
+    }
+
+    private static List<Integer> buildTieBreakers(int primaryRank, List<Integer> kickers) {
+        List<Integer> tieBreakers = new ArrayList<>();
+        tieBreakers.add(primaryRank);
+        tieBreakers.addAll(kickers);
+        return tieBreakers;
     }
 
     private static int straightHigh(List<Integer> ranks) {
