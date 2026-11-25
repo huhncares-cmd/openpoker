@@ -1,6 +1,5 @@
 package de.openpoker.server;
 
-import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -51,13 +50,13 @@ public final class GameController {
         addChat("System: Willkommen beim OpenPoker Server!");
     }
 
-    public synchronized Player addPlayer(String name, ObjectOutputStream out) {
+    public synchronized Player addPlayer(String name, ClientConnection connection) {
         if (connectedPlayers.size() >= MAX_PLAYERS) {
             throw new IllegalStateException("Der Tisch ist voll (maximal " + MAX_PLAYERS + " Spieler).");
         }
 
         String id = "P" + nextPlayerId++;
-        Player player = new Player(id, name, STARTING_CHIPS, out);
+        Player player = new Player(id, name, STARTING_CHIPS, connection);
         player.prepareForHand(false);
         connectedPlayers.add(player);
         addChat("System: " + name + " (" + id + ") ist dem Tisch beigetreten.");

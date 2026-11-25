@@ -1,8 +1,5 @@
 package de.openpoker.server;
 
-import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -20,7 +17,7 @@ public class Test {
     private static int bestanden;
     private static int anzahl;
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
         testeDeck();
         testePaar();
         testeKleineStrasse();
@@ -29,6 +26,7 @@ public class Test {
         testeRundenstart();
         testeFlop();
         testeFold();
+        testeVerbindungsabbruch();
 
         System.out.println("\nBestanden: " + bestanden + " von " + anzahl);
         if (bestanden != anzahl) {
@@ -102,7 +100,7 @@ public class Test {
                 bezahlt == 100 && spieler.getChips() == 0 && spieler.isAllIn());
     }
 
-    private static void testeRundenstart() throws IOException {
+    private static void testeRundenstart() {
         GameController spiel = new GameController();
         Player[] spieler = fuegeSpielerHinzu(spiel);
         GameStateDTO stand = spiel.snapshot(spieler[0]);
@@ -113,7 +111,7 @@ public class Test {
                 && stand.pot() == 30);
     }
 
-    private static void testeFlop() throws IOException {
+    private static void testeFlop() {
         GameController spiel = new GameController();
         Player[] spieler = fuegeSpielerHinzu(spiel);
         Player anna = spieler[0];
@@ -127,7 +125,7 @@ public class Test {
                 stand.phase() == GamePhase.FLOP && stand.communityCards().size() == 3);
     }
 
-    private static void testeFold() throws IOException {
+    private static void testeFold() {
         GameController spiel = new GameController();
         Player[] spieler = fuegeSpielerHinzu(spiel);
         Player anna = spieler[0];
@@ -142,14 +140,19 @@ public class Test {
                 && stand.phase() == GamePhase.SHOWDOWN);
     }
 
-    private static Player[] fuegeSpielerHinzu(GameController spiel) throws IOException {
-        Player anna = spiel.addPlayer("Anna", leereAusgabe());
-        Player ben = spiel.addPlayer("Ben", leereAusgabe());
-        return new Player[] {anna, ben};
+    private static void testeVerbindungsabbruch() {
+        GameController spiel = new GameController();
+        Player anna = spiel.addPlayer("Anna", stand -> true);
+        spiel.addPlayer("Ben", stand -> false);
+
+        pruefe("Spieler mit abgebrochener Verbindung wird entfernt",
+                spiel.snapshot(anna).players().size() == 1);
     }
 
-    private static ObjectOutputStream leereAusgabe() throws IOException {
-        return new ObjectOutputStream(OutputStream.nullOutputStream());
+    private static Player[] fuegeSpielerHinzu(GameController spiel) {
+        Player anna = spiel.addPlayer("Anna", stand -> true);
+        Player ben = spiel.addPlayer("Ben", stand -> true);
+        return new Player[] {anna, ben};
     }
 
     private static PlayerAction neueAktion(GameController spiel, Player player, ActionType typ) {

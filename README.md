@@ -1,161 +1,52 @@
-# OpenPoker – Technische Dokumentation & Architektur
+# OpenPoker
 
-OpenPoker ist ein netzwerkfähiges Multiplayer-Pokerspiel (vereinfachtes Texas Hold'em), umgesetzt in Java mit Swing-GUI und Socket-Kommunikation.
+Texas Hold'em im Netzwerk, Java + Swing. Teamprojekt Softwaretechnik WS26/27.
 
----
+## Starten
 
-## 1. Projekt- und Paketstruktur
+- `de.openpoker.server.Server` starten
+- pro Spieler `de.openpoker.Main` starten
+- Name + Server-Adresse eingeben, Port 8888
 
-Der Code ist in drei funktionale Schichten unterteilt:
+## Pakete
 
-```
-src/de/openpoker/
-├── Main.java           # Einstiegspunkt für den Client
-├── common/             # Geteilte Datenmodelle und Netzwerk-DTOs
-│   ├── model/
-│   │   ├── Card.java        # Record für eine Spielkarte (Farbe + Wert)
-│   │   ├── Suit.java        # Enum für Kartenfarben (Clubs, Diamonds, Hearts, Spades)
-│   │   ├── Rank.java        # Enum für Kartenwerte (Two bis Ace)
-│   │   └── GamePhase.java   # Enum der Spielphasen (Preflop, Flop, Turn, River, Showdown)
-│   └── network/
-│       ├── ActionType.java     # Enum aller Aktionen (Fold, Call, Raise, Chat, ...)
-│       ├── PlayerAction.java   # Übertragene Aktion mit Typ und benötigten Werten
-│       ├── PlayerStateDTO.java # Öffentliche Daten eines Spielers am Tisch (Chips, Einsatz, Status)
-│       └── GameStateDTO.java   # Kompletter Spielzustand für die GUI-Aktualisierung
-│
-├── server/             # Server- und Spiellogik
-│   ├── Server.java          # ServerSocket: nimmt Verbindungen an und startet Client-Threads
-│   ├── GameController.java  # Kern-Zustandsautomat: regelt Rundenablauf, Blinds, Einsätze und Pots
-│   ├── HandEvaluator.java   # Algorithmus zur Ermittlung der besten 5-Karten-Kombination
-│   ├── HandRank.java        # Mögliche Rangfolgen einer Pokerhand
-│   ├── HandResult.java      # Ergebnis der Handauswertung mit Vergleichswerten
-│   ├── Player.java          # Verwaltet Spielerdaten, Chipstände und Socket-Streams
-│   ├── GameTable.java       # Hält den Tisch-Pot, Deck und Gemeinschaftskarten
-│   ├── Deck.java            # Standard 52-Karten-Deck mit Misch- und Zieh-Methoden
-│   └── Test.java            # Einfache Tests mit Konsolenausgabe
-│
-└── client/             # Client-Anwendung & Benutzeroberfläche
-    ├── Client.java          # Client-Socket, Empfangs-Thread und Action-Dispatcher
-    ├── ConnectionConfig.java # Eingaben für Name, Server-Adresse und Port
-    └── ui/
-        ├── PokerWindow.java     # Hauptfenster (Layout, Action-Buttons, Tisch-Chat, Statusleiste)
-        ├── PokerActionListener.java # Übergibt Aktionen von der GUI an den Client
-        ├── PokerTablePanel.java # Graphics2D-Zeichnung: Tisch, Avatare, Dealer-Button, Pots, Karten
-        ├── CardPanel.java       # Zeichnet einzelne Spielkarten mit Schattierung, Index und Symbolen
-        └── ModernButton.java    # Eigener Button mit Farbverlauf und Hover-Effekt
-```
+- `common` – Karten, Spielphasen, Aktionen, DTOs (brauchen Client und Server)
+- `server` – Server, GameController, Player, Deck, GameTable, HandEvaluator
+- `client` – Client, Verbindungsdialog
+- `client/ui` – Fenster, Tisch, Karten, Buttons
 
-## Programm starten
+## Netzwerk
 
-1. `de.openpoker.server.Server` als Java-Anwendung starten.
-2. Danach `de.openpoker.Main` für jeden Client als Java-Anwendung starten.
-3. Spielername und Server-Adresse eingeben. Der Standard-Port ist `8888`.
+- TCP-Sockets, Objekte per Java-Serialisierung
+- Server: ein Thread pro Spieler
+- Client → Server: `PlayerAction` (Fold, Call, Raise, Chat …)
+- Server → alle Clients: `GameStateDTO` (kompletter Spielstand)
+- GameController ist `synchronized`
+- GUI-Update über `SwingUtilities.invokeLater()`
+- GameController kennt keine Streams, sendet nur über `ClientConnection` (DIP)
+- Anti-Cheat: fremde Karten (`revealedCards`) erst beim Showdown, vorher `null`
 
----
+## Spiel
 
-## 2. Client-Server-Architektur & Datenfluss
+- Dealer-Button rotiert
+- Blinds 10 / 20
+- Fold, Check, Call, Raise (+50, +100, All-In)
+- Preflop → Flop → Turn → River → Showdown
+- alle folden bis auf einen → der gewinnt sofort
+- Handauswertung: 7 Karten, alle 21 Fünferkombis testen, beste zählt
+- Wheel-Straße A-2-3-4-5, Kicker bei Gleichstand
+- Side Pots bei All-In: jeder spielt nur um das, was er selbst gesetzt hat
 
-Die Netzwerkkommunikation basiert auf **TCP-Sockets** und Java-Objektserialisierung (`ObjectInputStream` / `ObjectOutputStream`):
+## Team
 
-```
-       [ Client A ]                  [ Server ]                  [ Client B ]
-            │                            │                            │
-            │── 1. PlayerAction (RAISE) ─>│                            │
-            │   (z. B. Erhöhung +50)     │                            │
-            │                            │── 2. GameController prüft  │
-            │                            │      und aktualisiert      │
-            │                            │      den Spielzustand      │
-            │                            │                            │
-            │<────── 3. GameStateDTO ────┼────── 3. GameStateDTO ────>│
-            │   (Erhöhung für alle)      │   (Erhöhung für alle)      │
-            │                            │                            │
-```
-
-### Kommunikationsablauf:
-1. **Verbindungsaufbau**: Der Server wartet auf `Port 8888`. Bei jedem eingehenden Client startet `Server.java` einen neuen Thread, liest den Spielernamen und registriert den Spieler im `GameController`.
-2. **Aktion senden**: Klickt ein Spieler einen Button (z. B. *Call* oder *Raise*), sendet der Client ein `PlayerAction`-Objekt an den Server.
-3. **Zustandsaktualisierung (State Machine)**: Der `GameController` verarbeitet die Aktion synchronisiert (`synchronized`), berechnet Einsätze und Phasenübergänge und verteilt das neue `GameStateDTO` an alle Clients.
-4. **GUI-Update**: Jeder Client empfängt das DTO im Hintergrund-Thread und stößt via `SwingUtilities.invokeLater()` die Neuzeichnung des Fensters an.
-
-`PlayerAction` ist eine normale Datenklasse. Das Enum `ActionType` legt fest, ob es sich zum Beispiel um `FOLD`, `CALL` oder `RAISE` handelt. Je nach Typ werden zusätzlich die Zugnummer, der Raise-Betrag oder eine Chat-Nachricht verwendet.
-
-### MVP-Aufteilung
-
-Das Projekt orientiert sich am MVP-Muster:
-
-* **Model:** Die Klassen in `server` und die Datenklassen in `common` enthalten Spielzustand und Regeln.
-* **View:** `PokerWindow`, `PokerTablePanel` und `CardPanel` zeigen den Zustand an und nehmen Eingaben entgegen.
-* **Presenter:** `Client` verbindet die Oberfläche mit dem Server. Er sendet Aktionen und gibt empfangene Spielstände an die View weiter.
-
-### Schutz vor Cheaten (Information Hiding):
-* Die eigenen Handkarten stehen in `GameStateDTO.myCards`.
-* `PlayerStateDTO.revealedCards` enthält nur öffentlich aufgedeckte Karten anderer Spieler.
-* Erst beim **Showdown** schickt der Server diese Karten mit. Vorher ist das Feld `null`.
-
----
-
-## 3. Spiellogik & Spielphasen (`GameController`)
-
-Der `GameController` steuert den vollständigen Ablauf eines Texas Hold'em Spiels:
-
-1. **Rundenbeginn & Blinds**:
-   * Der Dealer-Button wandert reihum (`dealerIndex`).
-   * Bei zwei Spielern zahlt der Dealer den **Small Blind (10)** und der andere Spieler den **Big Blind (20)**. Bei mehr Spielern zahlen die ersten beiden Spieler nach dem Dealer.
-   * Der Mindesteinsatz der Runde (`currentBet`) wird auf 20 gesetzt.
-2. **Setzrunden (Preflop $\rightarrow$ Flop $\rightarrow$ Turn $\rightarrow$ River)**:
-   * Jeder Spieler am Zug kann **Folden**, **Checken** (wenn kein Einsatz offen ist), **Callen** oder **Raisen** (+50, +100 oder All-In).
-   * Sobald alle aktiven Spieler denselben Betrag eingezahlt haben (`pendingPlayerIds` ist leer), wechselt die Phase:
-     * **Flop**: 3 Gemeinschaftskarten werden aufgedeckt.
-     * **Turn**: 1 weitere Karte wird aufgedeckt.
-     * **River**: Die 5. und letzte Gemeinschaftskarte wird aufgedeckt.
-3. **Sonderfall Fold-Sieg**:
-   * Wenn alle bis auf einen Spieler folden, gewinnt der letzte verbleibende Spieler sofort den Pot ohne einen Handvergleich.
-
----
-
-## 4. Hand-Auswertungsalgorithmus (`HandEvaluator`)
-
-Der `HandEvaluator` ermittelt beim Showdown für jeden Spieler den exakten Pokerwert:
-
-1. **Kombinatorik**:
-   * Ein Spieler hat 2 private Handkarten und bis zu 5 Tischkarten (insgesamt 7 Karten).
-   * Mit zwei Schleifen werden jeweils 2 Karten weggelassen. Die übrigen 5 Karten bilden eine mögliche Pokerhand.
-   * Dadurch entstehen alle möglichen 5-Karten-Teilmengen:
-     $$\binom{7}{5} = \frac{7!}{5! \cdot 2!} = 21 \text{ Kombinationen}$$
-2. **Klassifizierung jeder 5er-Kombination**:
-   * Prüft auf Flush (gleiche Farbe) und Straße (`straightHigh`).
-   * Zählt gleiche Kartenwerte mit einem einfachen Array (`rankCounts`) und erkennt damit Paare, Drillinge, Vierlinge und Full House.
-   * Berücksichtigt Spezialregeln wie die **Wheel-Straße** (Ass als 1 bei `A-2-3-4-5`).
-3. **Vergleich & Tie-Breaker**:
-   * `HandResult` implementiert `Comparable<HandResult>`.
-   * Bei gleichem Hand-Rang (z. B. beide haben Two-Pair) entscheiden die sortierten `tieBreakers` (höheres Paar $\rightarrow$ zweites Paar $\rightarrow$ Kicker-Karte).
-
----
-
-## 5. Side-Pot & Auszahlungslogik (`calculatePayouts`)
-
-Wenn ein Spieler mit wenigen Chips All-In geht, wird der Pot mathematisch korrekt aufgeteilt:
-
-1. **Beitragsebenen**: Für jeden Spieler wird festgehalten, wie viele Chips er insgesamt in die Hand investiert hat (`handContribution`).
-2. **Pot-Splitting**:
-   * **Haupttopf (Main Pot)**: Bildet sich aus dem kleinsten All-In-Beitrag multipliziert mit der Anzahl aller Mitspieler. Um diesen Pot spielen alle Spieler mit.
-   * **Nebentöpfe (Side Pots)**: Entstehen für alle Einsätze, die über das All-In hinausgehen. Um diese Töpfe spielen nur die Spieler, die den höheren Betrag ebenfalls gezahlt haben.
-3. **Auszahlung**: Jeder Pot wird separat an den jeweils besten Spieler vergeben, der für diesen Teilpot qualifiziert ist.
-
----
-
-## 6. Aufgabenverteilung & Präsentationsschwerpunkte
-
-Das Projekt wurde modular in vier gleichwertige Kernbereiche aufgeteilt:
-
-| Teammitglied | Schwerpunktbereich | Zuständige Klassen | Hauptthemen in der Präsentation |
-| :--- | :--- | :--- | :--- |
-| **Konrad** | **Netzwerk-Stack & Datenfluss** | `Server.java`, `Client.java`, `ConnectionConfig.java`, `ActionType.java`, `PlayerAction.java`, `GameStateDTO.java`, `PlayerStateDTO.java` | TCP-Sockets, Multithreading (`poker-client-handler`, `poker-reader`), Objekt-Serialisierung, Information Hiding (Cheating-Schutz). |
-| **Leon** | **Spiellogik & State Machine** | `GameController.java`, `GamePhase.java`, `Deck.java`, `GameTable.java` | Zustandsautomat (Preflop bis Showdown), Pflichteinsätze (SB 10 / BB 20), rotierender Dealer-Button, Thread-Sicherheit via `synchronized` und `turnId`. |
-| **Raphael** | **Poker-Mathematik & Algorithmen** | `HandEvaluator.java`, `HandRank.java`, `HandResult.java`, `calculatePayouts()` in `GameController.java` | Hand-Kombinatorik ($\binom{7}{5} = 21$), Ranking-Logik & Wheel-Straße, Tie-Breaker/Kicker-Vergleich (`Comparable<HandResult>`), mathematische Side-Pot-Aufteilung bei All-Ins. |
-| **Alex** | **GUI, Custom Painting & UX** | `PokerWindow.java`, `PokerActionListener.java`, `PokerTablePanel.java`, `CardPanel.java`, `ModernButton.java` | 2D-Rendering mit `Graphics2D` (Casino-Filz, Mahagoni-Reling, plastische Karten), trigonometrische Spieler-Verteilung (`sin`/`cos`), responsive Steuerung & `ModernButton`. |
+| | Thema | Klassen |
+|---|---|---|
+| Konrad | Netzwerk | Server, Client, ClientConnection, ConnectionConfig, PlayerAction, ActionType, GameStateDTO, PlayerStateDTO |
+| Leon | Spielablauf | GameController, GamePhase, Deck, GameTable |
+| Raphael | Handauswertung, Side Pots | HandEvaluator, HandRank, HandResult, `calculatePayouts()` |
+| Alex | GUI | PokerWindow, PokerTablePanel, CardPanel, ModernButton, PokerActionListener |
 
 ## Tests
 
-Die Klasse `de.openpoker.server.Test` kann als Java-Anwendung gestartet werden. Sie gibt für jeden Test `OK` oder `FEHLER` aus.
-Die Ergebnisse und weitere Screenshots stehen in der `Testbeispiele.pdf`.
+- `de.openpoker.server.Test` starten → `OK` / `FEHLER` pro Test
+- Screenshots in `Testbeispiele.pdf`

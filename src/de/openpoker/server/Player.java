@@ -1,7 +1,5 @@
 package de.openpoker.server;
 
-import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import de.openpoker.common.model.Card;
@@ -17,14 +15,14 @@ public final class Player {
     private int currentBet;
     private int handContribution;
     private final List<Card> cards = new ArrayList<>();
-    private final ObjectOutputStream out;
+    private final ClientConnection connection;
     private boolean senderClosed;
 
-    public Player(String id, String name, int chips, ObjectOutputStream out) {
+    public Player(String id, String name, int chips, ClientConnection connection) {
         this.id = id;
         this.name = name;
         this.chips = chips;
-        this.out = out;
+        this.connection = connection;
     }
 
     public String getId() {
@@ -102,15 +100,11 @@ public final class Player {
             return false;
         }
 
-        try {
-            out.writeObject(state);
-            out.reset();
-            out.flush();
-            return true;
-        } catch (IOException exception) {
+        if (!connection.send(state)) {
             senderClosed = true;
             return false;
         }
+        return true;
     }
 
     public synchronized void closeSender() {

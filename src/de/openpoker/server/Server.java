@@ -6,6 +6,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import de.openpoker.common.network.GameStateDTO;
 import de.openpoker.common.network.PlayerAction;
 
 public final class Server {
@@ -38,7 +39,7 @@ public final class Server {
             out.flush();
 
             playerName = ((String) in.readObject()).trim();
-            player = gameController.addPlayer(playerName, out);
+            player = gameController.addPlayer(playerName, state -> send(out, state));
 
             while (!clientSocket.isClosed()) {
                 PlayerAction action = (PlayerAction) in.readObject();
@@ -52,6 +53,18 @@ public final class Server {
             if (player != null) {
                 gameController.removePlayer(player);
             }
+        }
+    }
+
+    // Einzige Stelle auf Serverseite, die das Übertragungsformat (Java-Serialisierung) kennt.
+    private static boolean send(ObjectOutputStream out, GameStateDTO state) {
+        try {
+            out.writeObject(state);
+            out.reset();
+            out.flush();
+            return true;
+        } catch (IOException exception) {
+            return false;
         }
     }
 
